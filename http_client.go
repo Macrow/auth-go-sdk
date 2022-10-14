@@ -1,7 +1,9 @@
 package auth
 
 import (
+	"context"
 	"errors"
+	"github.com/Macrow/auth-go-sdk/config"
 	"github.com/go-logr/logr"
 	"github.com/imroc/req/v3"
 	"net/http"
@@ -10,9 +12,10 @@ import (
 )
 
 type HttpClient struct {
-	config *HttpClientConfig
-	agent  *req.Client
+	Config *config.HttpClientConfig
+	Agent  *req.Client
 	logger logr.Logger
+	ctx    context.Context
 }
 
 func handleErrorAndGetResult[T Result](res *req.Response, logger logr.Logger, result *HttpResponse[T], defaultRes *T) T {
@@ -37,47 +40,69 @@ func handleErrorAndGetResult[T Result](res *req.Response, logger logr.Logger, re
 	return result.Result
 }
 
-func (c *HttpClient) initAccessCodeAndRandomKeyForAgent(req *http.Request) *req.Client {
-	if c.config.AccessCode.Enable {
-		c.agent.SetCommonHeader(c.config.AccessCode.Header, req.Header.Get(c.config.AccessCode.Header))
-	}
-	if c.config.RandomKey.Enable {
+func (c *HttpClient) initAccessCodeAndRandomKey(req *http.Request) error {
+	if c.Config.AccessCode.Enable {
 		if req == nil {
-			c.agent.SetCommonHeader(c.config.RandomKey.Header, GenerateRandomKey())
+			if len(c.Config.Client.AccessCode) == 0 {
+				return errors.New(MsgClientAccessCodeEmpty)
+			}
+			c.Agent.SetCommonHeader(c.Config.AccessCode.Header, c.Config.Client.AccessCode)
 		} else {
-			c.agent.SetCommonHeader(c.config.RandomKey.Header, req.Header.Get(c.config.RandomKey.Header))
+			c.Agent.SetCommonHeader(c.Config.AccessCode.Header, req.Header.Get(c.Config.AccessCode.Header))
 		}
 	}
-	return c.agent
+	if c.Config.RandomKey.Enable {
+		if req == nil {
+			c.Agent.SetCommonHeader(c.Config.RandomKey.Header, GenerateRandomKey())
+		} else {
+			c.Agent.SetCommonHeader(c.Config.RandomKey.Header, req.Header.Get(c.Config.RandomKey.Header))
+		}
+	}
+	return nil
 }
 
-func (c *HttpClient) initClientTokenForAgent(req *http.Request) (*req.Client, error) {
-	if c.config.Client.EnableIdAndSecret {
+func (c *HttpClient) initUserToken(req *http.Request) (string, error) {
+	token, err := c.extractUserToken(req)
+	if err != nil && !c.Config.AccessCode.SkipUserTokenCheck {
+		return "", err
+	}
+	c.Agent.SetCommonHeader(c.Config.User.Header, c.Config.User.HeaderSchema+" "+token)
+	return token, nil
+}
+
+func (c *HttpClient) initClientToken(req *http.Request) (string, error) {
+	clientId := ""
+	if c.Config.Client.EnableIdAndSecret {
 		if req == nil {
-			c.agent.SetCommonHeader(c.config.Client.Header, c.config.Client.HeaderSchema+" "+GenerateClientToken(c.config.Client.Id, c.config.Client.Secret))
+			if len(c.Config.Client.Id) == 0 || len(c.Config.Client.Secret) == 0 {
+				return clientId, errors.New(MsgClientIdOrSecretEmpty)
+			}
+			c.Agent.SetCommonHeader(c.Config.Client.Header, c.Config.Client.HeaderSchema+" "+GenerateClientToken(c.Config.Client.Id, c.Config.Client.Secret))
 		} else {
-			schemaAndToken := req.Header.Get(c.config.User.Header)
-			if len(schemaAndToken) > 0 && strings.HasPrefix(schemaAndToken, c.config.User.HeaderSchema+" ") {
-				_, _, err := ParseClientToken(schemaAndToken[len(c.config.User.HeaderSchema)+1:])
+			schemaAndToken := req.Header.Get(c.Config.Client.Header)
+			if len(schemaAndToken) > 0 && strings.HasPrefix(schemaAndToken, c.Config.Client.HeaderSchema+" ") {
+				clientId, _, err := ParseClientToken(schemaAndToken[len(c.Config.User.HeaderSchema)+1:])
 				if err != nil {
-					return nil, err
+					return clientId, err
 				}
-				c.agent.SetCommonHeader(c.config.Client.Header, schemaAndToken)
+				c.Agent.SetCommonHeader(c.Config.Client.Header, schemaAndToken)
+			} else {
+				return clientId, errors.New(MsgClientTokenEmpty)
 			}
 		}
 	}
-	return c.agent, nil
+	return clientId, nil
 }
 
 func (c *HttpClient) extractUserToken(req *http.Request) (string, error) {
-	schemaAndToken := req.Header.Get(c.config.User.Header)
+	schemaAndToken := req.Header.Get(c.Config.User.Header)
 	if len(schemaAndToken) == 0 {
 		return "", errors.New(MsgUserTokenEmpty)
 	}
-	if !strings.HasPrefix(schemaAndToken, c.config.User.HeaderSchema+" ") {
+	if !strings.HasPrefix(schemaAndToken, c.Config.User.HeaderSchema+" ") {
 		return "", errors.New(MsgUserTokenEmpty)
 	}
-	return schemaAndToken[len(c.config.User.HeaderSchema)+1:], nil
+	return schemaAndToken[len(c.Config.User.HeaderSchema)+1:], nil
 }
 
 func (c *HttpClient) checkAuth(req *http.Request, fulfillCustomAuth bool) CheckAuthResult {
@@ -86,20 +111,29 @@ func (c *HttpClient) checkAuth(req *http.Request, fulfillCustomAuth bool) CheckA
 		User:             nil,
 		CustomAuth:       nil,
 	}
-	token, err := c.extractUserToken(req)
+	err := c.initAccessCodeAndRandomKey(req)
+	if err != nil {
+		c.logger.Error(err, err.Error())
+		return errRes
+	}
+	token, err := c.initUserToken(req)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
 	}
 	result := &HttpResponse[CheckAuthResult]{}
-	res := c.initAccessCodeAndRandomKeyForAgent(req).
-		SetCommonHeader(c.config.User.Header, c.config.User.HeaderSchema+" "+token).
+	res := c.Agent.
 		Post(UrlPostCheckAuth).
 		SetResult(result).
 		SetQueryParam("fulfillCustomAuth", strconv.FormatBool(fulfillCustomAuth)).
 		Do()
 	r := handleErrorAndGetResult[CheckAuthResult](res, c.logger, result, &errRes)
 	r.User.Token = token
+	c.ctx = req.Context()
+	c.ctx = context.WithValue(c.ctx, KeyJwtUser, r.User)
+	if r.CustomAuth != nil {
+		c.ctx = context.WithValue(c.ctx, KeyCustomAuth, r.CustomAuth)
+	}
 	return r
 }
 
@@ -110,7 +144,12 @@ func (c *HttpClient) checkPermByCode(req *http.Request, code string, fulfillJwt 
 		CustomAuth:       nil,
 		CustomPerm:       nil,
 	}
-	token, err := c.extractUserToken(req)
+	err := c.initAccessCodeAndRandomKey(req)
+	if err != nil {
+		c.logger.Error(err, err.Error())
+		return errRes
+	}
+	token, err := c.initUserToken(req)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
@@ -121,14 +160,21 @@ func (c *HttpClient) checkPermByCode(req *http.Request, code string, fulfillJwt 
 	formData["fulfillJwt"] = strconv.FormatBool(fulfillJwt)
 	formData["fulfillCustomAuth"] = strconv.FormatBool(fulfillCustomAuth)
 	formData["fulfillCustomPerm"] = strconv.FormatBool(fulfillCustomPerm)
-	res := c.initAccessCodeAndRandomKeyForAgent(req).
-		SetCommonHeader(c.config.User.Header, c.config.User.HeaderSchema+" "+token).
+	res := c.Agent.
 		Post(UrlPostCheckPermByCode).
 		SetResult(result).
 		SetFormData(formData).
 		Do()
 	r := handleErrorAndGetResult[CheckPermResult](res, c.logger, result, &errRes)
 	r.User.Token = token
+	c.ctx = req.Context()
+	c.ctx = context.WithValue(c.ctx, KeyJwtUser, r.User)
+	if r.CustomAuth != nil {
+		c.ctx = context.WithValue(c.ctx, KeyCustomAuth, r.CustomAuth)
+	}
+	if r.CustomPerm != nil {
+		c.ctx = context.WithValue(c.ctx, KeyCustomPerm, r.CustomPerm)
+	}
 	return r
 }
 
@@ -139,7 +185,12 @@ func (c *HttpClient) checkPermByAction(req *http.Request, service string, method
 		CustomAuth:       nil,
 		CustomPerm:       nil,
 	}
-	token, err := c.extractUserToken(req)
+	err := c.initAccessCodeAndRandomKey(req)
+	if err != nil {
+		c.logger.Error(err, err.Error())
+		return errRes
+	}
+	token, err := c.initUserToken(req)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
@@ -152,14 +203,21 @@ func (c *HttpClient) checkPermByAction(req *http.Request, service string, method
 	formData["fulfillJwt"] = strconv.FormatBool(fulfillJwt)
 	formData["fulfillCustomAuth"] = strconv.FormatBool(fulfillCustomAuth)
 	formData["fulfillCustomPerm"] = strconv.FormatBool(fulfillCustomPerm)
-	res := c.initAccessCodeAndRandomKeyForAgent(req).
-		SetCommonHeader(c.config.User.Header, c.config.User.HeaderSchema+" "+token).
+	res := c.Agent.
 		Post(UrlPostCheckPermByAction).
 		SetResult(result).
 		SetFormData(formData).
 		Do()
 	r := handleErrorAndGetResult[CheckPermResult](res, c.logger, result, &errRes)
 	r.User.Token = token
+	c.ctx = req.Context()
+	c.ctx = context.WithValue(c.ctx, KeyJwtUser, r.User)
+	if r.CustomAuth != nil {
+		c.ctx = context.WithValue(c.ctx, KeyCustomAuth, r.CustomAuth)
+	}
+	if r.CustomPerm != nil {
+		c.ctx = context.WithValue(c.ctx, KeyCustomPerm, r.CustomPerm)
+	}
 	return r
 }
 
@@ -167,37 +225,53 @@ func (c *HttpClient) checkClientAuth(req *http.Request) CheckClientAuthResult {
 	errRes := CheckClientAuthResult{
 		ClientAuthOk: false,
 	}
-	result := &HttpResponse[CheckClientAuthResult]{}
-	c.initAccessCodeAndRandomKeyForAgent(req)
-	agent, err := c.initClientTokenForAgent(req)
+	err := c.initAccessCodeAndRandomKey(req)
 	if err != nil {
+		c.logger.Error(err, err.Error())
 		return errRes
 	}
-	res := agent.
+	clientId, err := c.initClientToken(req)
+	if err != nil {
+		c.logger.Error(err, err.Error())
+		return errRes
+	}
+	result := &HttpResponse[CheckClientAuthResult]{}
+	res := c.Agent.
 		Post(UrlPostCheckClientAuth).
 		SetResult(result).
 		Do()
-	return handleErrorAndGetResult[CheckClientAuthResult](res, c.logger, result, &errRes)
+	r := handleErrorAndGetResult[CheckClientAuthResult](res, c.logger, result, &errRes)
+	c.ctx = req.Context()
+	c.ctx = context.WithValue(c.ctx, KeyClientId, &clientId)
+	return r
 }
 
 func (c *HttpClient) checkClientPermByCode(req *http.Request, code string) CheckClientPermResult {
 	errRes := CheckClientPermResult{
 		ClientPermOk: false,
 	}
+	err := c.initAccessCodeAndRandomKey(req)
+	if err != nil {
+		c.logger.Error(err, err.Error())
+		return errRes
+	}
+	clientId, err := c.initClientToken(req)
+	if err != nil {
+		c.logger.Error(err, err.Error())
+		return errRes
+	}
 	result := &HttpResponse[CheckClientPermResult]{}
 	formData := make(map[string]string, 1)
 	formData["code"] = code
-	c.initAccessCodeAndRandomKeyForAgent(req)
-	agent, err := c.initClientTokenForAgent(req)
-	if err != nil {
-		return errRes
-	}
-	res := agent.
+	res := c.Agent.
 		Post(UrlPostCheckClientPermByCode).
 		SetResult(result).
 		SetFormData(formData).
 		Do()
-	return handleErrorAndGetResult[CheckClientPermResult](res, c.logger, result, &errRes)
+	r := handleErrorAndGetResult[CheckClientPermResult](res, c.logger, result, &errRes)
+	c.ctx = req.Context()
+	c.ctx = context.WithValue(c.ctx, KeyClientId, &clientId)
+	return r
 }
 
 func (c *HttpClient) Request(url string, queryParam map[string]string, formData map[string]string) HttpResponse[interface{}] {
@@ -207,15 +281,18 @@ func (c *HttpClient) Request(url string, queryParam map[string]string, formData 
 		Success: false,
 		Result:  nil,
 	}
-	c.initAccessCodeAndRandomKeyForAgent(nil)
-	agent, err := c.initClientTokenForAgent(nil)
+	err := c.initAccessCodeAndRandomKey(nil)
 	if err != nil {
 		c.logger.Error(err, err.Error())
-		errRes.Message = err.Error()
+		return errRes
+	}
+	_, err = c.initClientToken(nil)
+	if err != nil {
+		c.logger.Error(err, err.Error())
 		return errRes
 	}
 	result := &HttpResponse[interface{}]{}
-	res := agent.
+	res := c.Agent.
 		Post(url).
 		SetResult(result).
 		SetQueryParams(queryParam).
@@ -237,4 +314,32 @@ func (c *HttpClient) Request(url string, queryParam map[string]string, formData 
 	}
 
 	return *result
+}
+
+func (c *HttpClient) GetJwtUser() *JwtUser {
+	if c.ctx == nil {
+		return nil
+	}
+	return c.ctx.Value(KeyJwtUser).(*JwtUser)
+}
+
+func (c *HttpClient) GetCustomAuth() interface{} {
+	if c.ctx == nil {
+		return nil
+	}
+	return c.ctx.Value(KeyCustomAuth)
+}
+
+func (c *HttpClient) GetCustomPerm() interface{} {
+	if c.ctx == nil {
+		return nil
+	}
+	return c.ctx.Value(KeyCustomPerm)
+}
+
+func (c *HttpClient) GetClientId() *string {
+	if c.ctx == nil {
+		return nil
+	}
+	return c.ctx.Value(KeyClientId).(*string)
 }

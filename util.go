@@ -9,14 +9,14 @@ import (
 	"time"
 )
 
-func getNonEmptyValue(val string) string {
+func GetNonEmptyValue(val string) string {
 	if len(val) == 0 {
 		panic("val is empty")
 	}
 	return val
 }
 
-func getNonEmptyValueWithBackup(val string, backup string) string {
+func GetNonEmptyValueWithBackup(val string, backup string) string {
 	if len(val) > 0 {
 		return val
 	}

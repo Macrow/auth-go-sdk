@@ -23,6 +23,7 @@ const (
 
 	MsgServerFail            = "访问服务失败"
 	MsgAuthServerFail        = "访问鉴权服务失败"
+	MsgClientAccessCodeEmpty = "未提供客户端访问码"
 	MsgUserTokenEmpty        = "未提供用户令牌"
 	MsgClientTokenEmpty      = "未提供客户端令牌"
 	MsgClientIdOrSecretEmpty = "未提供客户端Id和秘钥"
@@ -40,5 +41,8 @@ const (
 	UrlPostCheckClientAuth       = "/client/validate"
 	UrlPostCheckClientPermByCode = "/client/check-operation"
 
-	KeyJwtUser = "__Auth_Jwt_User__"
+	KeyJwtUser    = "__JwtUser__"
+	KeyCustomAuth = "__CustomAuth__"
+	KeyCustomPerm = "__CustomPerm__"
+	KeyClientId   = "__ClientId__"
 )
