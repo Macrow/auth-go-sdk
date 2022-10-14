@@ -77,3 +77,75 @@ func ExtractClientInfoAndToken(r *http.Request, header, headerSchema string) (cl
 	clientId, clientSecret, err = ParseClientToken(schemaAndToken[len(headerSchema)+1:])
 	return
 }
+
+func SetSkipAuthCheck(skip bool, f func(key string, val interface{})) {
+	f(KeySkipAuthCheck, skip)
+}
+
+func GetSkipAuthCheck(f func(key string) interface{}) bool {
+	v := f(KeySkipAuthCheck)
+	if v == nil {
+		return false
+	}
+	return v.(bool)
+}
+
+func SetJwtUser(jwtUser *JwtUser, f func(key string, val interface{})) {
+	f(KeyJwtUser, jwtUser)
+}
+
+func GetJwtUser(f func(key string) interface{}) *JwtUser {
+	v := f(KeyJwtUser)
+	if v == nil {
+		return nil
+	}
+	return v.(*JwtUser)
+}
+
+func SetCustomAuth(customAuth interface{}, f func(key string, val interface{})) {
+	f(KeyCustomAuth, customAuth)
+}
+
+func GetCustomAuth(f func(key string) interface{}) interface{} {
+	v := f(KeyCustomAuth)
+	if v == nil {
+		return nil
+	}
+	return v
+}
+
+func SetCustomPerm(customAuth interface{}, f func(key string, val interface{}) interface{}) {
+	f(KeyCustomPerm, customAuth)
+}
+
+func GetCustomPerm(f func(key string) interface{}) interface{} {
+	v := f(KeyCustomPerm)
+	if v == nil {
+		return nil
+	}
+	return v
+}
+
+func SetClientId(clientId string, f func(key string, val interface{})) {
+	f(KeyClientId, clientId)
+}
+
+func GetClientId(f func(key string) interface{}) interface{} {
+	v := f(KeyClientId)
+	if v == nil {
+		return nil
+	}
+	return v.(string)
+}
+
+func SetMetaBy(metaBy string, f func(key string, v interface{})) {
+	f(KeyMetaBy, metaBy)
+}
+
+func GetMetaBy(f func(key string) interface{}) interface{} {
+	v := f(KeyMetaBy)
+	if v == nil {
+		return nil
+	}
+	return v.(string)
+}

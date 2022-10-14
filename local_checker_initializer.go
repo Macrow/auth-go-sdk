@@ -1,9 +1,5 @@
 package auth
 
-import (
-	"context"
-)
-
 type LocalCheckerOption func(checker *LocalAuthChecker)
 
 func WithLocalAccessCodeConfig(config LocalAccessCode) LocalCheckerOption {
@@ -41,9 +37,8 @@ func WithLocalAuditingConfig(config LocalAuditing) LocalCheckerOption {
 	}
 }
 
-func NewLocalAuthChecker(ctx context.Context, options ...LocalCheckerOption) *LocalAuthChecker {
+func NewLocalAuthChecker(options ...LocalCheckerOption) *LocalAuthChecker {
 	checker := &LocalAuthChecker{
-		Ctx: ctx,
 		Config: &LocalAuthCheckerConfig{
 			LocalAccessCode: LocalAccessCode{
 				Enable: false,

@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"errors"
 	"github.com/go-logr/logr"
 	"github.com/imroc/req/v3"
@@ -13,7 +12,6 @@ type HttpClient struct {
 	Config *HttpClientConfig
 	Agent  *req.Client
 	logger logr.Logger
-	ctx    context.Context
 }
 
 func handleErrorAndGetResult[T Result](res *req.Response, logger logr.Logger, result *HttpResponse[T], defaultRes *T) *T {
@@ -38,29 +36,29 @@ func handleErrorAndGetResult[T Result](res *req.Response, logger logr.Logger, re
 	return &result.Result
 }
 
-func (c *HttpClient) initAccessCodeAndRandomKey(req *http.Request) error {
+func (c *HttpClient) initAccessCodeAndRandomKey(r *http.Request) error {
 	if c.Config.AccessCode.Enable {
-		if req == nil {
+		if r == nil {
 			if len(c.Config.Client.AccessCode) == 0 {
 				return errors.New(MsgClientAccessCodeEmpty)
 			}
 			c.Agent.SetCommonHeader(c.Config.AccessCode.Header, c.Config.Client.AccessCode)
 		} else {
-			c.Agent.SetCommonHeader(c.Config.AccessCode.Header, ExtractCommonHeader(req, c.Config.AccessCode.Header))
+			c.Agent.SetCommonHeader(c.Config.AccessCode.Header, ExtractCommonHeader(r, c.Config.AccessCode.Header))
 		}
 	}
 	if c.Config.RandomKey.Enable {
-		if req == nil {
+		if r == nil {
 			c.Agent.SetCommonHeader(c.Config.RandomKey.Header, GenerateRandomKey())
 		} else {
-			c.Agent.SetCommonHeader(c.Config.RandomKey.Header, ExtractCommonHeader(req, c.Config.RandomKey.Header))
+			c.Agent.SetCommonHeader(c.Config.RandomKey.Header, ExtractCommonHeader(r, c.Config.RandomKey.Header))
 		}
 	}
 	return nil
 }
 
-func (c *HttpClient) initUserToken(req *http.Request) (string, error) {
-	token, err := ExtractUserToken(req, c.Config.User.Header, c.Config.User.HeaderSchema)
+func (c *HttpClient) initUserToken(r *http.Request) (string, error) {
+	token, err := ExtractUserToken(r, c.Config.User.Header, c.Config.User.HeaderSchema)
 	if err != nil && !c.Config.AccessCode.SkipUserTokenCheck {
 		return "", err
 	}
@@ -68,16 +66,16 @@ func (c *HttpClient) initUserToken(req *http.Request) (string, error) {
 	return token, nil
 }
 
-func (c *HttpClient) initClientToken(req *http.Request) (string, error) {
+func (c *HttpClient) initClientToken(r *http.Request) (string, error) {
 	clientId := ""
 	if c.Config.Client.EnableIdAndSecret {
-		if req == nil {
+		if r == nil {
 			if len(c.Config.Client.Id) == 0 || len(c.Config.Client.Secret) == 0 {
 				return clientId, errors.New(MsgClientIdOrSecretEmpty)
 			}
 			c.Agent.SetCommonHeader(c.Config.Client.Header, c.Config.Client.HeaderSchema+" "+GenerateClientToken(c.Config.Client.Id, c.Config.Client.Secret))
 		} else {
-			clientId, _, schemaAndToken, err := ExtractClientInfoAndToken(req, c.Config.Client.Header, c.Config.Client.HeaderSchema)
+			clientId, _, schemaAndToken, err := ExtractClientInfoAndToken(r, c.Config.Client.Header, c.Config.Client.HeaderSchema)
 			if err != nil {
 				return clientId, err
 			}
@@ -87,18 +85,18 @@ func (c *HttpClient) initClientToken(req *http.Request) (string, error) {
 	return clientId, nil
 }
 
-func (c *HttpClient) CheckAuth(req *http.Request, fulfillCustomAuth bool) *CheckAuthResult {
+func (c *HttpClient) CheckAuth(r *http.Request, fulfillCustomAuth bool) *CheckAuthResult {
 	errRes := &CheckAuthResult{
 		SkippedAuthCheck: false,
 		User:             nil,
 		CustomAuth:       nil,
 	}
-	err := c.initAccessCodeAndRandomKey(req)
+	err := c.initAccessCodeAndRandomKey(r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
 	}
-	token, err := c.initUserToken(req)
+	token, err := c.initUserToken(r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
@@ -109,29 +107,24 @@ func (c *HttpClient) CheckAuth(req *http.Request, fulfillCustomAuth bool) *Check
 		SetResult(result).
 		SetQueryParam("fulfillCustomAuth", strconv.FormatBool(fulfillCustomAuth)).
 		Do()
-	r := handleErrorAndGetResult[CheckAuthResult](res, c.logger, result, errRes)
-	r.User.Token = token
-	c.ctx = req.Context()
-	c.ctx = context.WithValue(c.ctx, KeyJwtUser, r.User)
-	if r.CustomAuth != nil {
-		c.ctx = context.WithValue(c.ctx, KeyCustomAuth, r.CustomAuth)
-	}
-	return r
+	handledRes := handleErrorAndGetResult[CheckAuthResult](res, c.logger, result, errRes)
+	handledRes.User.Token = token
+	return handledRes
 }
 
-func (c *HttpClient) CheckPermByCode(req *http.Request, code string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) *CheckPermResult {
+func (c *HttpClient) CheckPermByCode(r *http.Request, code string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) *CheckPermResult {
 	errRes := &CheckPermResult{
 		SkippedAuthCheck: false,
 		User:             nil,
 		CustomAuth:       nil,
 		CustomPerm:       nil,
 	}
-	err := c.initAccessCodeAndRandomKey(req)
+	err := c.initAccessCodeAndRandomKey(r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
 	}
-	token, err := c.initUserToken(req)
+	token, err := c.initUserToken(r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
@@ -147,32 +140,24 @@ func (c *HttpClient) CheckPermByCode(req *http.Request, code string, fulfillJwt 
 		SetResult(result).
 		SetFormData(formData).
 		Do()
-	r := handleErrorAndGetResult[CheckPermResult](res, c.logger, result, errRes)
-	r.User.Token = token
-	c.ctx = req.Context()
-	c.ctx = context.WithValue(c.ctx, KeyJwtUser, r.User)
-	if r.CustomAuth != nil {
-		c.ctx = context.WithValue(c.ctx, KeyCustomAuth, r.CustomAuth)
-	}
-	if r.CustomPerm != nil {
-		c.ctx = context.WithValue(c.ctx, KeyCustomPerm, r.CustomPerm)
-	}
-	return r
+	handledRes := handleErrorAndGetResult[CheckPermResult](res, c.logger, result, errRes)
+	handledRes.User.Token = token
+	return handledRes
 }
 
-func (c *HttpClient) CheckPermByAction(req *http.Request, service string, method string, path string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) *CheckPermResult {
+func (c *HttpClient) CheckPermByAction(r *http.Request, service string, method string, path string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) *CheckPermResult {
 	errRes := &CheckPermResult{
 		SkippedAuthCheck: false,
 		User:             nil,
 		CustomAuth:       nil,
 		CustomPerm:       nil,
 	}
-	err := c.initAccessCodeAndRandomKey(req)
+	err := c.initAccessCodeAndRandomKey(r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
 	}
-	token, err := c.initUserToken(req)
+	token, err := c.initUserToken(r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
@@ -190,29 +175,21 @@ func (c *HttpClient) CheckPermByAction(req *http.Request, service string, method
 		SetResult(result).
 		SetFormData(formData).
 		Do()
-	r := handleErrorAndGetResult[CheckPermResult](res, c.logger, result, errRes)
-	r.User.Token = token
-	c.ctx = req.Context()
-	c.ctx = context.WithValue(c.ctx, KeyJwtUser, r.User)
-	if r.CustomAuth != nil {
-		c.ctx = context.WithValue(c.ctx, KeyCustomAuth, r.CustomAuth)
-	}
-	if r.CustomPerm != nil {
-		c.ctx = context.WithValue(c.ctx, KeyCustomPerm, r.CustomPerm)
-	}
-	return r
+	handledRes := handleErrorAndGetResult[CheckPermResult](res, c.logger, result, errRes)
+	handledRes.User.Token = token
+	return handledRes
 }
 
-func (c *HttpClient) CheckClientAuth(req *http.Request) *CheckClientAuthResult {
+func (c *HttpClient) CheckClientAuth(r *http.Request) *CheckClientAuthResult {
 	errRes := &CheckClientAuthResult{
 		ClientAuthOk: false,
 	}
-	err := c.initAccessCodeAndRandomKey(req)
+	err := c.initAccessCodeAndRandomKey(r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
 	}
-	clientId, err := c.initClientToken(req)
+	_, err = c.initClientToken(r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
@@ -222,22 +199,19 @@ func (c *HttpClient) CheckClientAuth(req *http.Request) *CheckClientAuthResult {
 		Post(UrlPostCheckClientAuth).
 		SetResult(result).
 		Do()
-	r := handleErrorAndGetResult[CheckClientAuthResult](res, c.logger, result, errRes)
-	c.ctx = req.Context()
-	c.ctx = context.WithValue(c.ctx, KeyClientId, &clientId)
-	return r
+	return handleErrorAndGetResult[CheckClientAuthResult](res, c.logger, result, errRes)
 }
 
-func (c *HttpClient) CheckClientPermByCode(req *http.Request, code string) *CheckClientPermResult {
+func (c *HttpClient) CheckClientPermByCode(r *http.Request, code string) *CheckClientPermResult {
 	errRes := &CheckClientPermResult{
 		ClientPermOk: false,
 	}
-	err := c.initAccessCodeAndRandomKey(req)
+	err := c.initAccessCodeAndRandomKey(r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
 	}
-	clientId, err := c.initClientToken(req)
+	_, err = c.initClientToken(r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
@@ -250,13 +224,10 @@ func (c *HttpClient) CheckClientPermByCode(req *http.Request, code string) *Chec
 		SetResult(result).
 		SetFormData(formData).
 		Do()
-	r := handleErrorAndGetResult[CheckClientPermResult](res, c.logger, result, errRes)
-	c.ctx = req.Context()
-	c.ctx = context.WithValue(c.ctx, KeyClientId, &clientId)
-	return r
+	return handleErrorAndGetResult[CheckClientPermResult](res, c.logger, result, errRes)
 }
 
-func (c *HttpClient) Request(url string, queryParam map[string]string, formData map[string]string) HttpResponse[interface{}] {
+func (c *HttpClient) ruest(url string, queryParam map[string]string, formData map[string]string) HttpResponse[interface{}] {
 	errRes := HttpResponse[interface{}]{
 		Code:    1,
 		Message: MsgInternalError,
@@ -294,34 +265,5 @@ func (c *HttpClient) Request(url string, queryParam map[string]string, formData 
 	if result == nil {
 		c.logger.Error(nil, "解析返回结果错误")
 	}
-
 	return *result
-}
-
-func (c *HttpClient) GetJwtUser() *JwtUser {
-	if c.ctx == nil {
-		return nil
-	}
-	return c.ctx.Value(KeyJwtUser).(*JwtUser)
-}
-
-func (c *HttpClient) GetCustomAuth() interface{} {
-	if c.ctx == nil {
-		return nil
-	}
-	return c.ctx.Value(KeyCustomAuth)
-}
-
-func (c *HttpClient) GetCustomPerm() interface{} {
-	if c.ctx == nil {
-		return nil
-	}
-	return c.ctx.Value(KeyCustomPerm)
-}
-
-func (c *HttpClient) GetClientId() *string {
-	if c.ctx == nil {
-		return nil
-	}
-	return c.ctx.Value(KeyClientId).(*string)
 }

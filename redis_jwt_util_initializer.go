@@ -1,18 +1,20 @@
 package auth
 
 import (
-	"github.com/go-redis/redis/v9"
+	"context"
+	"github.com/go-redis/redis/v8"
+	"github.com/go-redis/redis_rate/v9"
 	"github.com/golang-jwt/jwt/v4"
 	"strings"
 )
 
-type JwtUtilOption func(util *JwtUtil)
+type JwtUtilOption func(util *RedisJwtUtil)
 
 func WithRedisConfig(config Redis) JwtUtilOption {
 	if len(config.Address) == 0 {
 		panic("redis地址配置错误")
 	}
-	return func(util *JwtUtil) {
+	return func(util *RedisJwtUtil) {
 		util.Config.Redis.Address = config.Address
 		util.Config.Redis.Db = config.Db
 		util.Config.Redis.Password = config.Password
@@ -23,12 +25,14 @@ func WithRedisConfig(config Redis) JwtUtilOption {
 				Addrs:    addressArray,
 				Password: config.Password,
 			})
+			util.RateLimiter = redis_rate.NewLimiter(util.RedisClusterClient)
 		} else {
 			util.RedisClient = redis.NewClient(&redis.Options{
 				Addr:     config.Address,
 				DB:       config.Db,
 				Password: config.Password,
 			})
+			util.RateLimiter = redis_rate.NewLimiter(util.RedisClient)
 		}
 	}
 }
@@ -49,7 +53,7 @@ func WithJwtConfig(config Jwt) JwtUtilOption {
 	if config.ExpireInMinutes <= 0 {
 		config.ExpireInMinutes = -1
 	}
-	return func(util *JwtUtil) {
+	return func(util *RedisJwtUtil) {
 		util.Config.Jwt.Prefix = config.Prefix
 		util.Config.Jwt.CacheSplitter = config.CacheSplitter
 		util.Config.Jwt.Issuer = config.Issuer
@@ -71,10 +75,13 @@ func WithJwtConfig(config Jwt) JwtUtilOption {
 	}
 }
 
-func NewJwtUtil(options ...JwtUtilOption) *JwtUtil {
-	jwtUtil := &JwtUtil{}
+func NewRedisJwtUtil(ctx context.Context, options ...JwtUtilOption) *RedisJwtUtil {
+	util := &RedisJwtUtil{Ctx: ctx}
 	for _, opt := range options {
-		opt(jwtUtil)
+		opt(util)
 	}
-	return jwtUtil
+	if (util.RedisClient == nil && util.RedisClusterClient == nil) || util.RateLimiter == nil {
+		panic("请配置redis参数")
+	}
+	return util
 }
