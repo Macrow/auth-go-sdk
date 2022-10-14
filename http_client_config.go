@@ -3,7 +3,6 @@ package auth
 type BasicConfig struct {
 	AuthServiceBaseUrl string
 	CurrentServiceName string
-	CacheSplitter      string
 }
 
 type AccessCodeConfig struct {
@@ -15,13 +14,6 @@ type AccessCodeConfig struct {
 type RandomKeyConfig struct {
 	Enable bool
 	Header string
-}
-
-type JwtConfig struct {
-	Issuer          string
-	ExpireInMinutes int
-	PublicKey       string
-	PrivateKey      string
 }
 
 type UserConfig struct {
@@ -46,7 +38,6 @@ type HttpClientConfig struct {
 	BasicConfig
 	AccessCode AccessCodeConfig
 	RandomKey  RandomKeyConfig
-	Jwt        JwtConfig
 	User       UserConfig
 	Client     ClientConfig
 	Auditing   AuditingConfig

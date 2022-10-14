@@ -1,27 +1,28 @@
 package auth
 
 const (
-	DefaultCacheSplitter = "::"
-	// DefaultIssuer 默认签发人
-	DefaultIssuer = "auth-go-sdk"
-	// DefaultJwtExpireInMinutes 缓存失效时间默认为365天
-	DefaultJwtExpireInMinutes = 60 * 24 * 365
-	DefaultHeaderRandomKey    = "Random-Key"
-	DefaultHeaderAccessCode   = "Access-Code"
-	DefaultHeaderUserToken    = "Authorization"
-	DefaultHeaderClientToken  = "Client-Authorization"
-	DefaultHeaderSchema       = "Bearer"
-	DefaultMetaBy             = "id"
+	DefaultCachePrefix       = "Jwt"
+	DefaultCacheSplitter     = "::"
+	DefaultIssuer            = "auth-go-sdk"
+	DefaultHeaderRandomKey   = "Random-Key"
+	DefaultHeaderAccessCode  = "Access-Code"
+	DefaultHeaderUserToken   = "Authorization"
+	DefaultHeaderClientToken = "HttpClient-Authorization"
+	DefaultHeaderSchema      = "Bearer"
+	DefaultMetaBy            = "id"
 
-	JwtTokenClaimsId       string = "id"
-	JwtTokenClaimsName     string = "name"
-	JwtTokenClaimsKind     string = "kind"
-	JwtTokenClaimsDeviceId string = "did"
-	JwtTokenClaimsIssuer   string = "iss"
-	JwtTokenClaimsIssueAt  string = "iat"
-	JwtTokenClaimsExpireAt string = "exp"
+	JwtTokenClaimsId          = "id"
+	JwtTokenClaimsName        = "name"
+	JwtTokenClaimsKind        = "kind"
+	JwtTokenClaimsDeviceId    = "did"
+	JwtTokenClaimsIssuer      = "iss"
+	JwtTokenClaimsIssueAt     = "iat"
+	JwtTokenClaimsExpireAt    = "exp"
+	ClientIdAndSecretSplitter = "@"
+	DidAndIatJoiner           = "-"
 
-	MsgAuthServerFail        = "访问鉴权服务器失败"
+	MsgServerFail            = "访问服务失败"
+	MsgAuthServerFail        = "访问鉴权服务失败"
 	MsgUserTokenEmpty        = "未提供用户令牌"
 	MsgClientTokenEmpty      = "未提供客户端令牌"
 	MsgClientIdOrSecretEmpty = "未提供客户端Id和秘钥"
@@ -30,11 +31,13 @@ const (
 	MsgAuthFail              = "身份验证失败"
 	MsgPermFail              = "权限验证失败"
 	MsgInternalError         = "服务内部错误"
+	MsgJwtErrFormat          = "令牌格式错误"
+	MsgJwtErrVersion         = "令牌版本错误"
 
-	UrlGetCheckAuth              = "/current/jwt"
+	UrlPostCheckAuth             = "/current/jwt"
 	UrlPostCheckPermByCode       = "/current/check-operation"
 	UrlPostCheckPermByAction     = "/current/check-action"
-	UrlGetCheckClientAuth        = "/client/validate"
+	UrlPostCheckClientAuth       = "/client/validate"
 	UrlPostCheckClientPermByCode = "/client/check-operation"
 
 	KeyJwtUser = "__Auth_Jwt_User__"

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"github.com/go-logr/logr"
 	"github.com/imroc/req/v3"
 	"net/http"
@@ -8,7 +9,7 @@ import (
 	"strings"
 )
 
-type Client struct {
+type HttpClient struct {
 	config *HttpClientConfig
 	agent  *req.Client
 	logger logr.Logger
@@ -18,9 +19,6 @@ func handleErrorAndGetResult[T Result](res *req.Response, logger logr.Logger, re
 	if defaultRes == nil {
 		logger.Error(nil, "默认返回数据错误")
 	}
-	if result == nil {
-		logger.Error(nil, "获取鉴权信息错误")
-	}
 	if res.Err != nil {
 		logger.Error(res.Err, MsgAuthServerFail)
 		return *defaultRes
@@ -29,6 +27,9 @@ func handleErrorAndGetResult[T Result](res *req.Response, logger logr.Logger, re
 		logger.Error(nil, MsgAuthServerFail)
 		return *defaultRes
 	}
+	if result == nil {
+		logger.Error(nil, "解析返回结果错误")
+	}
 	if result.Code != 0 {
 		logger.Error(nil, result.Message)
 		return *defaultRes
@@ -36,7 +37,7 @@ func handleErrorAndGetResult[T Result](res *req.Response, logger logr.Logger, re
 	return result.Result
 }
 
-func (c *Client) initAccessCodeAndRandomKeyForAgent(req *http.Request) *req.Client {
+func (c *HttpClient) initAccessCodeAndRandomKeyForAgent(req *http.Request) *req.Client {
 	if c.config.AccessCode.Enable {
 		c.agent.SetCommonHeader(c.config.AccessCode.Header, req.Header.Get(c.config.AccessCode.Header))
 	}
@@ -50,7 +51,7 @@ func (c *Client) initAccessCodeAndRandomKeyForAgent(req *http.Request) *req.Clie
 	return c.agent
 }
 
-func (c *Client) initClientTokenForAgent(req *http.Request) (*req.Client, error) {
+func (c *HttpClient) initClientTokenForAgent(req *http.Request) (*req.Client, error) {
 	if c.config.Client.EnableIdAndSecret {
 		if req == nil {
 			c.agent.SetCommonHeader(c.config.Client.Header, c.config.Client.HeaderSchema+" "+GenerateClientToken(c.config.Client.Id, c.config.Client.Secret))
@@ -68,18 +69,18 @@ func (c *Client) initClientTokenForAgent(req *http.Request) (*req.Client, error)
 	return c.agent, nil
 }
 
-func (c *Client) extractUserToken(req *http.Request) (string, error) {
+func (c *HttpClient) extractUserToken(req *http.Request) (string, error) {
 	schemaAndToken := req.Header.Get(c.config.User.Header)
 	if len(schemaAndToken) == 0 {
-		return "", &UserTokenEmptyError{}
+		return "", errors.New(MsgUserTokenEmpty)
 	}
 	if !strings.HasPrefix(schemaAndToken, c.config.User.HeaderSchema+" ") {
-		return "", &UserTokenEmptyError{}
+		return "", errors.New(MsgUserTokenEmpty)
 	}
 	return schemaAndToken[len(c.config.User.HeaderSchema)+1:], nil
 }
 
-func (c *Client) checkAuth(req *http.Request, fulfillCustomAuth bool) CheckAuthResult {
+func (c *HttpClient) checkAuth(req *http.Request, fulfillCustomAuth bool) CheckAuthResult {
 	errRes := CheckAuthResult{
 		SkippedAuthCheck: false,
 		User:             nil,
@@ -93,7 +94,7 @@ func (c *Client) checkAuth(req *http.Request, fulfillCustomAuth bool) CheckAuthR
 	result := &HttpResponse[CheckAuthResult]{}
 	res := c.initAccessCodeAndRandomKeyForAgent(req).
 		SetCommonHeader(c.config.User.Header, c.config.User.HeaderSchema+" "+token).
-		Get(UrlGetCheckAuth).
+		Post(UrlPostCheckAuth).
 		SetResult(result).
 		SetQueryParam("fulfillCustomAuth", strconv.FormatBool(fulfillCustomAuth)).
 		Do()
@@ -102,7 +103,7 @@ func (c *Client) checkAuth(req *http.Request, fulfillCustomAuth bool) CheckAuthR
 	return r
 }
 
-func (c *Client) checkPermByCode(req *http.Request, code string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) CheckPermResult {
+func (c *HttpClient) checkPermByCode(req *http.Request, code string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) CheckPermResult {
 	errRes := CheckPermResult{
 		SkippedAuthCheck: false,
 		User:             nil,
@@ -120,7 +121,7 @@ func (c *Client) checkPermByCode(req *http.Request, code string, fulfillJwt bool
 	formData["fulfillJwt"] = strconv.FormatBool(fulfillJwt)
 	formData["fulfillCustomAuth"] = strconv.FormatBool(fulfillCustomAuth)
 	formData["fulfillCustomPerm"] = strconv.FormatBool(fulfillCustomPerm)
-	res := c.agent.
+	res := c.initAccessCodeAndRandomKeyForAgent(req).
 		SetCommonHeader(c.config.User.Header, c.config.User.HeaderSchema+" "+token).
 		Post(UrlPostCheckPermByCode).
 		SetResult(result).
@@ -131,7 +132,7 @@ func (c *Client) checkPermByCode(req *http.Request, code string, fulfillJwt bool
 	return r
 }
 
-func (c *Client) checkPermByAction(req *http.Request, service string, method string, path string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) CheckPermResult {
+func (c *HttpClient) checkPermByAction(req *http.Request, service string, method string, path string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) CheckPermResult {
 	errRes := CheckPermResult{
 		SkippedAuthCheck: false,
 		User:             nil,
@@ -151,9 +152,9 @@ func (c *Client) checkPermByAction(req *http.Request, service string, method str
 	formData["fulfillJwt"] = strconv.FormatBool(fulfillJwt)
 	formData["fulfillCustomAuth"] = strconv.FormatBool(fulfillCustomAuth)
 	formData["fulfillCustomPerm"] = strconv.FormatBool(fulfillCustomPerm)
-	res := c.agent.
+	res := c.initAccessCodeAndRandomKeyForAgent(req).
 		SetCommonHeader(c.config.User.Header, c.config.User.HeaderSchema+" "+token).
-		Post(UrlPostCheckPermByCode).
+		Post(UrlPostCheckPermByAction).
 		SetResult(result).
 		SetFormData(formData).
 		Do()
@@ -162,37 +163,78 @@ func (c *Client) checkPermByAction(req *http.Request, service string, method str
 	return r
 }
 
-func (c *Client) checkClientAuth(req *http.Request) CheckClientAuthResult {
+func (c *HttpClient) checkClientAuth(req *http.Request) CheckClientAuthResult {
 	errRes := CheckClientAuthResult{
 		ClientAuthOk: false,
 	}
 	result := &HttpResponse[CheckClientAuthResult]{}
+	c.initAccessCodeAndRandomKeyForAgent(req)
 	agent, err := c.initClientTokenForAgent(req)
 	if err != nil {
 		return errRes
 	}
 	res := agent.
-		Get(UrlPostCheckPermByCode).
+		Post(UrlPostCheckClientAuth).
 		SetResult(result).
 		Do()
 	return handleErrorAndGetResult[CheckClientAuthResult](res, c.logger, result, &errRes)
 }
 
-func (c *Client) checkClientPermByCode(req *http.Request, code string) CheckClientPermResult {
+func (c *HttpClient) checkClientPermByCode(req *http.Request, code string) CheckClientPermResult {
 	errRes := CheckClientPermResult{
 		ClientPermOk: false,
 	}
 	result := &HttpResponse[CheckClientPermResult]{}
 	formData := make(map[string]string, 1)
 	formData["code"] = code
+	c.initAccessCodeAndRandomKeyForAgent(req)
 	agent, err := c.initClientTokenForAgent(req)
 	if err != nil {
 		return errRes
 	}
 	res := agent.
-		Post(UrlPostCheckPermByCode).
+		Post(UrlPostCheckClientPermByCode).
 		SetResult(result).
 		SetFormData(formData).
 		Do()
 	return handleErrorAndGetResult[CheckClientPermResult](res, c.logger, result, &errRes)
+}
+
+func (c *HttpClient) Request(url string, queryParam map[string]string, formData map[string]string) HttpResponse[interface{}] {
+	errRes := HttpResponse[interface{}]{
+		Code:    1,
+		Message: MsgInternalError,
+		Success: false,
+		Result:  nil,
+	}
+	c.initAccessCodeAndRandomKeyForAgent(nil)
+	agent, err := c.initClientTokenForAgent(nil)
+	if err != nil {
+		c.logger.Error(err, err.Error())
+		errRes.Message = err.Error()
+		return errRes
+	}
+	result := &HttpResponse[interface{}]{}
+	res := agent.
+		Post(url).
+		SetResult(result).
+		SetQueryParams(queryParam).
+		SetFormData(formData).
+		Do()
+
+	if res.Err != nil {
+		c.logger.Error(res.Err, MsgServerFail)
+		errRes.Message = res.Err.Error()
+		return errRes
+	}
+	if res.StatusCode != http.StatusOK {
+		c.logger.Error(nil, MsgServerFail)
+		errRes.Message = res.Err.Error()
+		return errRes
+	}
+	if result == nil {
+		c.logger.Error(nil, "解析返回结果错误")
+	}
+
+	return *result
 }

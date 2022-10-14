@@ -2,11 +2,29 @@ package auth
 
 import (
 	"encoding/base64"
+	"errors"
 	"math/rand"
 	"strconv"
 	"strings"
 	"time"
 )
+
+func getNonEmptyValue(val string) string {
+	if len(val) == 0 {
+		panic("val is empty")
+	}
+	return val
+}
+
+func getNonEmptyValueWithBackup(val string, backup string) string {
+	if len(val) > 0 {
+		return val
+	}
+	if len(backup) == 0 {
+		panic("backup is empty")
+	}
+	return backup
+}
 
 func GenerateRandomKey() string {
 	rand.Seed(time.Now().UnixNano())
@@ -23,13 +41,13 @@ func ParseClientToken(clientToken string) (clientId string, clientSecret string,
 		panic(err)
 	}
 	idAndSecret := string(output)
-	split := strings.Split(idAndSecret, "@")
+	split := strings.Split(idAndSecret, ClientIdAndSecretSplitter)
 	if len(split) != 2 {
-		return "", "", &ClientTokenFailError{}
+		return "", "", errors.New(MsgClientTokenFail)
 	}
 	return split[0], split[1], nil
 }
 
 func GenerateClientToken(clientId string, clientSecret string) string {
-	return base64.StdEncoding.EncodeToString([]byte(clientId + "@" + clientSecret))
+	return base64.StdEncoding.EncodeToString([]byte(clientId + ClientIdAndSecretSplitter + clientSecret))
 }

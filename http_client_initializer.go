@@ -2,39 +2,21 @@ package auth
 
 import "github.com/imroc/req/v3"
 
-type ClientOption func(*Client)
-
-func getNonEmptyValue(val string) string {
-	if len(val) == 0 {
-		panic("val is empty")
-	}
-	return val
-}
-
-func getNonEmptyValueWithBackup(val string, backup string) string {
-	if len(val) > 0 {
-		return val
-	}
-	if len(backup) == 0 {
-		panic("backup is empty")
-	}
-	return backup
-}
+type ClientOption func(*HttpClient)
 
 func WithBasicConfig(config BasicConfig) ClientOption {
-	return func(client *Client) {
+	return func(client *HttpClient) {
 		baseUrl := getNonEmptyValue(config.AuthServiceBaseUrl)
 		client.config.BasicConfig = BasicConfig{
 			AuthServiceBaseUrl: baseUrl,
 			CurrentServiceName: getNonEmptyValue(config.CurrentServiceName),
-			CacheSplitter:      getNonEmptyValueWithBackup(config.CacheSplitter, DefaultCacheSplitter),
 		}
 		client.agent.SetBaseURL(baseUrl)
 	}
 }
 
 func WithAccessCodeConfig(config AccessCodeConfig) ClientOption {
-	return func(client *Client) {
+	return func(client *HttpClient) {
 		client.config.AccessCode = AccessCodeConfig{
 			Enable:         config.Enable,
 			SkipTokenCheck: config.SkipTokenCheck,
@@ -44,7 +26,7 @@ func WithAccessCodeConfig(config AccessCodeConfig) ClientOption {
 }
 
 func WithRandomKeyConfig(config RandomKeyConfig) ClientOption {
-	return func(client *Client) {
+	return func(client *HttpClient) {
 		client.config.RandomKey = RandomKeyConfig{
 			Enable: config.Enable,
 			Header: getNonEmptyValueWithBackup(config.Header, DefaultHeaderRandomKey),
@@ -52,21 +34,8 @@ func WithRandomKeyConfig(config RandomKeyConfig) ClientOption {
 	}
 }
 
-func WithJwtConfig(config JwtConfig) ClientOption {
-	return func(client *Client) {
-		expireInMinutes := config.ExpireInMinutes
-		if expireInMinutes <= 0 {
-			expireInMinutes = DefaultJwtExpireInMinutes
-		}
-		client.config.Jwt = JwtConfig{
-			Issuer:          getNonEmptyValueWithBackup(config.Issuer, DefaultIssuer),
-			ExpireInMinutes: expireInMinutes,
-		}
-	}
-}
-
 func WithUserConfig(config UserConfig) ClientOption {
-	return func(client *Client) {
+	return func(client *HttpClient) {
 		client.config.User = UserConfig{
 			Header:       getNonEmptyValueWithBackup(config.Header, DefaultHeaderUserToken),
 			HeaderSchema: getNonEmptyValueWithBackup(config.HeaderSchema, DefaultHeaderSchema),
@@ -75,7 +44,7 @@ func WithUserConfig(config UserConfig) ClientOption {
 }
 
 func WithClientConfig(config ClientConfig) ClientOption {
-	return func(client *Client) {
+	return func(client *HttpClient) {
 		client.config.Client = ClientConfig{
 			Id:                config.Id,
 			Secret:            config.Secret,
@@ -88,20 +57,19 @@ func WithClientConfig(config ClientConfig) ClientOption {
 }
 
 func WithAuditingConfig(config AuditingConfig) ClientOption {
-	return func(client *Client) {
+	return func(client *HttpClient) {
 		client.config.Auditing = AuditingConfig{
 			MetaBy: getNonEmptyValueWithBackup(config.MetaBy, DefaultMetaBy),
 		}
 	}
 }
 
-func NewHttpClient(AuthServiceBaseUrl string, CurrentServiceName string, options ...ClientOption) *Client {
-	client := &Client{
+func NewHttpClient(AuthServiceBaseUrl string, CurrentServiceName string, options ...ClientOption) *HttpClient {
+	client := &HttpClient{
 		config: &HttpClientConfig{
 			BasicConfig: BasicConfig{
 				AuthServiceBaseUrl: AuthServiceBaseUrl,
 				CurrentServiceName: CurrentServiceName,
-				CacheSplitter:      DefaultCacheSplitter,
 			},
 			AccessCode: AccessCodeConfig{
 				Enable:         false,
@@ -111,10 +79,6 @@ func NewHttpClient(AuthServiceBaseUrl string, CurrentServiceName string, options
 			RandomKey: RandomKeyConfig{
 				Enable: false,
 				Header: DefaultHeaderRandomKey,
-			},
-			Jwt: JwtConfig{
-				Issuer:          DefaultIssuer,
-				ExpireInMinutes: DefaultJwtExpireInMinutes,
 			},
 			User: UserConfig{
 				Header:       DefaultHeaderUserToken,
