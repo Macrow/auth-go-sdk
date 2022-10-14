@@ -1,10 +1,9 @@
-package config
+package auth
 
 type Redis struct {
-	Address   string
-	Db        int
-	Password  string
-	IsCluster bool
+	Address  string
+	Db       int
+	Password string
 }
 
 type Jwt struct {

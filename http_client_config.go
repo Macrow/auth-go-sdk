@@ -1,4 +1,4 @@
-package config
+package auth
 
 type Service struct {
 	AuthServiceBaseUrl string

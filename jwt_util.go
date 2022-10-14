@@ -5,7 +5,6 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
-	"github.com/Macrow/auth-go-sdk/config"
 	"github.com/go-redis/redis/v9"
 	"github.com/golang-jwt/jwt/v4"
 	"strconv"
@@ -14,12 +13,15 @@ import (
 )
 
 type JwtUtil struct {
-	Config             config.JwtUtilConfig
-	RedisIsCluster     bool
+	Config             JwtUtilConfig
 	RedisClient        *redis.Client
 	RedisClusterClient *redis.ClusterClient
 	PublicKey          *rsa.PublicKey
 	PrivateKey         *rsa.PrivateKey
+}
+
+func (j *JwtUtil) IsRedisCluster() bool {
+	return strings.Contains(j.Config.Address, ",")
 }
 
 func (j *JwtUtil) GetUserJwtCacheKey(id, did string, iat float64) string {
@@ -127,12 +129,12 @@ func (j *JwtUtil) SignJwtAndSaveToCache(ctx context.Context, id, name, kind, did
 	return jwtUser
 }
 
-func (j *JwtUtil) checkJwtIsInCache(ctx context.Context, jwtUser *JwtUser) bool {
+func (j *JwtUtil) CheckJwtIsInCache(ctx context.Context, jwtUser *JwtUser) bool {
 	if jwtUser == nil {
 		return false
 	}
 	key := j.GetUserJwtCacheKey(jwtUser.Id, jwtUser.Did, jwtUser.Iat)
-	if j.RedisIsCluster {
+	if j.IsRedisCluster() {
 		exists, err := j.RedisClusterClient.Do(ctx, "EXISTS", key).Bool()
 		if err != nil {
 			panic(err)
@@ -174,7 +176,7 @@ func (j *JwtUtil) GetJwtUserByUserId(ctx context.Context, key string) *JwtUser {
 
 func (j *JwtUtil) ClearRedisCachesByKey(ctx context.Context, key string) {
 	if len(key) > 0 {
-		if j.RedisIsCluster {
+		if j.IsRedisCluster() {
 			_, err := j.RedisClusterClient.Do(ctx, "DEL", key).Result()
 			if err != nil {
 				panic(err)
@@ -189,7 +191,7 @@ func (j *JwtUtil) ClearRedisCachesByKey(ctx context.Context, key string) {
 }
 
 func (j *JwtUtil) GetObjInRedis(ctx context.Context, key string) []byte {
-	if j.RedisIsCluster {
+	if j.IsRedisCluster() {
 		res, err := j.RedisClusterClient.Do(ctx, "GET", key).Result()
 		if err != nil {
 			panic(err)
@@ -209,7 +211,7 @@ func (j *JwtUtil) SetObjInRedis(ctx context.Context, key string, obj interface{}
 	if err != nil {
 		panic(err)
 	}
-	if j.RedisIsCluster {
+	if j.IsRedisCluster() {
 		_, err := j.RedisClusterClient.Do(ctx, "SET", key, marshal).Result()
 		if err != nil {
 			panic(err)
@@ -236,7 +238,7 @@ func (j *JwtUtil) SetObjInRedis(ctx context.Context, key string, obj interface{}
 
 func (j *JwtUtil) ClearRedisCachesByKeyPattern(ctx context.Context, keyPattern string) {
 	if len(keyPattern) > 0 {
-		if j.RedisIsCluster {
+		if j.IsRedisCluster() {
 			// 如果是redis集群，需要遍历master节点才能使用keys进行模糊匹配
 			err := j.RedisClusterClient.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
 				clearRedisByKeyPattern(ctx, client, keyPattern)

@@ -41,8 +41,9 @@ const (
 	UrlPostCheckClientAuth       = "/client/validate"
 	UrlPostCheckClientPermByCode = "/client/check-operation"
 
-	KeyJwtUser    = "__JwtUser__"
-	KeyCustomAuth = "__CustomAuth__"
-	KeyCustomPerm = "__CustomPerm__"
-	KeyClientId   = "__ClientId__"
+	KeySkipByAccessCode = "__SkipByAccessCode__"
+	KeyJwtUser          = "__JwtUser__"
+	KeyCustomAuth       = "__CustomAuth__"
+	KeyCustomPerm       = "__CustomPerm__"
+	KeyClientId         = "__ClientId__"
 )
