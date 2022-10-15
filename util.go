@@ -78,11 +78,11 @@ func ExtractClientInfoAndToken(r *http.Request, header, headerSchema string) (cl
 	return
 }
 
-func SetSkipAuthCheck(skip bool, f func(key string, val interface{})) {
+func SetSkipAuthCheck(skip bool, f func(key interface{}, val interface{})) {
 	f(KeySkipAuthCheck, skip)
 }
 
-func GetSkipAuthCheck(f func(key string) interface{}) bool {
+func GetSkipAuthCheck(f func(key any) any) bool {
 	v := f(KeySkipAuthCheck)
 	if v == nil {
 		return false
@@ -90,11 +90,11 @@ func GetSkipAuthCheck(f func(key string) interface{}) bool {
 	return v.(bool)
 }
 
-func SetJwtUser(jwtUser *JwtUser, f func(key string, val interface{})) {
+func SetJwtUser(jwtUser *JwtUser, f func(key interface{}, val interface{})) {
 	f(KeyJwtUser, jwtUser)
 }
 
-func GetJwtUser(f func(key string) interface{}) *JwtUser {
+func GetJwtUser(f func(key any) any) *JwtUser {
 	v := f(KeyJwtUser)
 	if v == nil {
 		return nil
@@ -102,11 +102,11 @@ func GetJwtUser(f func(key string) interface{}) *JwtUser {
 	return v.(*JwtUser)
 }
 
-func SetCustomAuth(customAuth interface{}, f func(key string, val interface{})) {
+func SetCustomAuth(customAuth interface{}, f func(key interface{}, val interface{})) {
 	f(KeyCustomAuth, customAuth)
 }
 
-func GetCustomAuth(f func(key string) interface{}) interface{} {
+func GetCustomAuth(f func(key any) any) interface{} {
 	v := f(KeyCustomAuth)
 	if v == nil {
 		return nil
@@ -114,11 +114,11 @@ func GetCustomAuth(f func(key string) interface{}) interface{} {
 	return v
 }
 
-func SetCustomPerm(customAuth interface{}, f func(key string, val interface{}) interface{}) {
+func SetCustomPerm(customAuth interface{}, f func(key interface{}, val interface{}) interface{}) {
 	f(KeyCustomPerm, customAuth)
 }
 
-func GetCustomPerm(f func(key string) interface{}) interface{} {
+func GetCustomPerm(f func(key any) any) interface{} {
 	v := f(KeyCustomPerm)
 	if v == nil {
 		return nil
@@ -126,11 +126,11 @@ func GetCustomPerm(f func(key string) interface{}) interface{} {
 	return v
 }
 
-func SetClientId(clientId string, f func(key string, val interface{})) {
+func SetClientId(clientId string, f func(key interface{}, val interface{})) {
 	f(KeyClientId, clientId)
 }
 
-func GetClientId(f func(key string) interface{}) interface{} {
+func GetClientId(f func(key any) any) interface{} {
 	v := f(KeyClientId)
 	if v == nil {
 		return nil
@@ -138,11 +138,11 @@ func GetClientId(f func(key string) interface{}) interface{} {
 	return v.(string)
 }
 
-func SetMetaBy(metaBy string, f func(key string, v interface{})) {
+func SetMetaBy(metaBy string, f func(key interface{}, v interface{})) {
 	f(KeyMetaBy, metaBy)
 }
 
-func GetMetaBy(f func(key string) interface{}) interface{} {
+func GetMetaBy(f func(key any) any) interface{} {
 	v := f(KeyMetaBy)
 	if v == nil {
 		return nil
