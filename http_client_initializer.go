@@ -6,15 +6,6 @@ import (
 
 type ClientOption func(*HttpClient)
 
-func WithBasicConfig(config Service) ClientOption {
-	return func(client *HttpClient) {
-		baseUrl := GetNonEmptyValue(config.AuthServiceBaseUrl)
-		client.Config.Service.AuthServiceBaseUrl = baseUrl
-		client.Config.Service.CurrentServiceName = GetNonEmptyValue(config.CurrentServiceName)
-		client.Agent.SetBaseURL(baseUrl)
-	}
-}
-
 func WithAccessCodeConfig(config AccessCode) ClientOption {
 	return func(client *HttpClient) {
 		client.Config.AccessCode.Enable = config.Enable

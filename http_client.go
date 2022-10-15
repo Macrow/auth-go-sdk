@@ -36,29 +36,29 @@ func handleErrorAndGetResult[T Result](res *req.Response, logger logr.Logger, re
 	return &result.Result
 }
 
-func (c *HttpClient) initAccessCodeAndRandomKey(r *http.Request) error {
+func (c *HttpClient) initAccessCodeAndRandomKey(f GetHeaderFun) error {
 	if c.Config.AccessCode.Enable {
-		if r == nil {
+		if f == nil {
 			if len(c.Config.Client.AccessCode) == 0 {
 				return errors.New(MsgClientAccessCodeEmpty)
 			}
 			c.Agent.SetCommonHeader(c.Config.AccessCode.Header, c.Config.Client.AccessCode)
 		} else {
-			c.Agent.SetCommonHeader(c.Config.AccessCode.Header, ExtractCommonHeader(r, c.Config.AccessCode.Header))
+			c.Agent.SetCommonHeader(c.Config.AccessCode.Header, ExtractCommonHeader(f, c.Config.AccessCode.Header))
 		}
 	}
 	if c.Config.RandomKey.Enable {
-		if r == nil {
+		if f == nil {
 			c.Agent.SetCommonHeader(c.Config.RandomKey.Header, GenerateRandomKey())
 		} else {
-			c.Agent.SetCommonHeader(c.Config.RandomKey.Header, ExtractCommonHeader(r, c.Config.RandomKey.Header))
+			c.Agent.SetCommonHeader(c.Config.RandomKey.Header, ExtractCommonHeader(f, c.Config.RandomKey.Header))
 		}
 	}
 	return nil
 }
 
-func (c *HttpClient) initUserToken(r *http.Request) (string, error) {
-	token, err := ExtractUserToken(r, c.Config.User.Header, c.Config.User.HeaderSchema)
+func (c *HttpClient) initUserToken(f GetHeaderFun) (string, error) {
+	token, err := ExtractUserToken(f, c.Config.User.Header, c.Config.User.HeaderSchema)
 	if err != nil && !c.Config.AccessCode.SkipUserTokenCheck {
 		return "", err
 	}
@@ -66,16 +66,16 @@ func (c *HttpClient) initUserToken(r *http.Request) (string, error) {
 	return token, nil
 }
 
-func (c *HttpClient) initClientToken(r *http.Request) (string, error) {
+func (c *HttpClient) initClientToken(f GetHeaderFun) (string, error) {
 	clientId := ""
 	if c.Config.Client.EnableIdAndSecret {
-		if r == nil {
+		if f == nil {
 			if len(c.Config.Client.Id) == 0 || len(c.Config.Client.Secret) == 0 {
 				return clientId, errors.New(MsgClientIdOrSecretEmpty)
 			}
 			c.Agent.SetCommonHeader(c.Config.Client.Header, c.Config.Client.HeaderSchema+" "+GenerateClientToken(c.Config.Client.Id, c.Config.Client.Secret))
 		} else {
-			clientId, _, schemaAndToken, err := ExtractClientInfoAndToken(r, c.Config.Client.Header, c.Config.Client.HeaderSchema)
+			clientId, _, schemaAndToken, err := ExtractClientInfoAndToken(f, c.Config.Client.Header, c.Config.Client.HeaderSchema)
 			if err != nil {
 				return clientId, err
 			}
@@ -85,18 +85,18 @@ func (c *HttpClient) initClientToken(r *http.Request) (string, error) {
 	return clientId, nil
 }
 
-func (c *HttpClient) CheckAuth(r *http.Request, fulfillCustomAuth bool) *CheckAuthResult {
+func (c *HttpClient) CheckAuth(f GetHeaderFun, fulfillCustomAuth bool) *CheckAuthResult {
 	errRes := &CheckAuthResult{
 		SkippedAuthCheck: false,
 		User:             nil,
 		CustomAuth:       nil,
 	}
-	err := c.initAccessCodeAndRandomKey(r)
+	err := c.initAccessCodeAndRandomKey(f)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
 	}
-	token, err := c.initUserToken(r)
+	token, err := c.initUserToken(f)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
@@ -108,23 +108,25 @@ func (c *HttpClient) CheckAuth(r *http.Request, fulfillCustomAuth bool) *CheckAu
 		SetQueryParam("fulfillCustomAuth", strconv.FormatBool(fulfillCustomAuth)).
 		Do()
 	handledRes := handleErrorAndGetResult[CheckAuthResult](res, c.logger, result, errRes)
-	handledRes.User.Token = token
+	if handledRes.User != nil {
+		handledRes.User.Token = token
+	}
 	return handledRes
 }
 
-func (c *HttpClient) CheckPermByCode(r *http.Request, code string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) *CheckPermResult {
+func (c *HttpClient) CheckPermByCode(f GetHeaderFun, code string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) *CheckPermResult {
 	errRes := &CheckPermResult{
 		SkippedAuthCheck: false,
 		User:             nil,
 		CustomAuth:       nil,
 		CustomPerm:       nil,
 	}
-	err := c.initAccessCodeAndRandomKey(r)
+	err := c.initAccessCodeAndRandomKey(f)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
 	}
-	token, err := c.initUserToken(r)
+	token, err := c.initUserToken(f)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
@@ -141,23 +143,25 @@ func (c *HttpClient) CheckPermByCode(r *http.Request, code string, fulfillJwt bo
 		SetFormData(formData).
 		Do()
 	handledRes := handleErrorAndGetResult[CheckPermResult](res, c.logger, result, errRes)
-	handledRes.User.Token = token
+	if handledRes.User != nil {
+		handledRes.User.Token = token
+	}
 	return handledRes
 }
 
-func (c *HttpClient) CheckPermByAction(r *http.Request, service string, method string, path string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) *CheckPermResult {
+func (c *HttpClient) CheckPermByAction(f GetHeaderFun, service string, method string, path string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) *CheckPermResult {
 	errRes := &CheckPermResult{
 		SkippedAuthCheck: false,
 		User:             nil,
 		CustomAuth:       nil,
 		CustomPerm:       nil,
 	}
-	err := c.initAccessCodeAndRandomKey(r)
+	err := c.initAccessCodeAndRandomKey(f)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
 	}
-	token, err := c.initUserToken(r)
+	token, err := c.initUserToken(f)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
@@ -176,20 +180,22 @@ func (c *HttpClient) CheckPermByAction(r *http.Request, service string, method s
 		SetFormData(formData).
 		Do()
 	handledRes := handleErrorAndGetResult[CheckPermResult](res, c.logger, result, errRes)
-	handledRes.User.Token = token
+	if handledRes.User != nil {
+		handledRes.User.Token = token
+	}
 	return handledRes
 }
 
-func (c *HttpClient) CheckClientAuth(r *http.Request) *CheckClientAuthResult {
+func (c *HttpClient) CheckClientAuth(f GetHeaderFun) *CheckClientAuthResult {
 	errRes := &CheckClientAuthResult{
 		ClientAuthOk: false,
 	}
-	err := c.initAccessCodeAndRandomKey(r)
+	err := c.initAccessCodeAndRandomKey(f)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
 	}
-	_, err = c.initClientToken(r)
+	_, err = c.initClientToken(f)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
@@ -202,16 +208,16 @@ func (c *HttpClient) CheckClientAuth(r *http.Request) *CheckClientAuthResult {
 	return handleErrorAndGetResult[CheckClientAuthResult](res, c.logger, result, errRes)
 }
 
-func (c *HttpClient) CheckClientPermByCode(r *http.Request, code string) *CheckClientPermResult {
+func (c *HttpClient) CheckClientPermByCode(f GetHeaderFun, code string) *CheckClientPermResult {
 	errRes := &CheckClientPermResult{
 		ClientPermOk: false,
 	}
-	err := c.initAccessCodeAndRandomKey(r)
+	err := c.initAccessCodeAndRandomKey(f)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes
 	}
-	_, err = c.initClientToken(r)
+	_, err = c.initClientToken(f)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return errRes

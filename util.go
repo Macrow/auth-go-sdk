@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"math/rand"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -53,22 +52,22 @@ func GenerateClientToken(clientId string, clientSecret string) string {
 	return base64.StdEncoding.EncodeToString([]byte(clientId + ClientIdAndSecretSplitter + clientSecret))
 }
 
-func ExtractCommonHeader(r *http.Request, header string) string {
-	return r.Header.Get(header)
+func ExtractCommonHeader(f GetHeaderFun, header string) string {
+	return f(header)
 }
 
-func ExtractUserToken(r *http.Request, header, headerSchema string) (string, error) {
-	schemaAndToken := r.Header.Get(header)
+func ExtractUserToken(fun GetHeaderFun, header, headerSchema string) (string, error) {
+	schemaAndToken := fun(header)
 	if len(schemaAndToken) == 0 || !strings.HasPrefix(schemaAndToken, headerSchema+" ") {
 		return "", errors.New(MsgUserTokenEmpty)
 	}
 	return schemaAndToken[len(headerSchema)+1:], nil
 }
 
-func ExtractClientInfoAndToken(r *http.Request, header, headerSchema string) (clientId string, clientSecret string, schemaAndToken string, err error) {
+func ExtractClientInfoAndToken(f GetHeaderFun, header, headerSchema string) (clientId string, clientSecret string, schemaAndToken string, err error) {
 	clientId = ""
 	clientSecret = ""
-	schemaAndToken = r.Header.Get(header)
+	schemaAndToken = f(header)
 	err = nil
 	if len(schemaAndToken) == 0 || !strings.HasPrefix(schemaAndToken, headerSchema+" ") {
 		err = errors.New(MsgClientTokenEmpty)
@@ -78,14 +77,14 @@ func ExtractClientInfoAndToken(r *http.Request, header, headerSchema string) (cl
 	return
 }
 
-type SetFunc = func(key string, val interface{})
-type GetFunc = func(Key string) interface{}
+type SetValFunc = func(key string, val interface{})
+type GetValFunc = func(Key string) interface{}
 
-func SetSkipAuthCheck(skip bool, f SetFunc) {
+func SetSkipAuthCheck(skip bool, f SetValFunc) {
 	f(KeySkipAuthCheck, skip)
 }
 
-func GetSkipAuthCheck(f GetFunc) bool {
+func GetSkipAuthCheck(f GetValFunc) bool {
 	v := f(KeySkipAuthCheck)
 	if v == nil {
 		return false
@@ -93,11 +92,11 @@ func GetSkipAuthCheck(f GetFunc) bool {
 	return v.(bool)
 }
 
-func SetJwtUser(jwtUser *JwtUser, f SetFunc) {
+func SetJwtUser(jwtUser *JwtUser, f SetValFunc) {
 	f(KeyJwtUser, jwtUser)
 }
 
-func GetJwtUser(f GetFunc) *JwtUser {
+func GetJwtUser(f GetValFunc) *JwtUser {
 	v := f(KeyJwtUser)
 	if v == nil {
 		return nil
@@ -105,11 +104,11 @@ func GetJwtUser(f GetFunc) *JwtUser {
 	return v.(*JwtUser)
 }
 
-func SetCustomAuth(customAuth interface{}, f SetFunc) {
+func SetCustomAuth(customAuth interface{}, f SetValFunc) {
 	f(KeyCustomAuth, customAuth)
 }
 
-func GetCustomAuth(f GetFunc) interface{} {
+func GetCustomAuth(f GetValFunc) interface{} {
 	v := f(KeyCustomAuth)
 	if v == nil {
 		return nil
@@ -117,11 +116,11 @@ func GetCustomAuth(f GetFunc) interface{} {
 	return v
 }
 
-func SetCustomPerm(customAuth interface{}, f SetFunc) {
+func SetCustomPerm(customAuth interface{}, f SetValFunc) {
 	f(KeyCustomPerm, customAuth)
 }
 
-func GetCustomPerm(f GetFunc) interface{} {
+func GetCustomPerm(f GetValFunc) interface{} {
 	v := f(KeyCustomPerm)
 	if v == nil {
 		return nil
@@ -129,11 +128,11 @@ func GetCustomPerm(f GetFunc) interface{} {
 	return v
 }
 
-func SetClientId(clientId string, f SetFunc) {
+func SetClientId(clientId string, f SetValFunc) {
 	f(KeyClientId, clientId)
 }
 
-func GetClientId(f GetFunc) interface{} {
+func GetClientId(f GetValFunc) interface{} {
 	v := f(KeyClientId)
 	if v == nil {
 		return nil
@@ -141,11 +140,11 @@ func GetClientId(f GetFunc) interface{} {
 	return v.(string)
 }
 
-func SetMetaBy(metaBy string, f SetFunc) {
+func SetMetaBy(metaBy string, f SetValFunc) {
 	f(KeyMetaBy, metaBy)
 }
 
-func GetMetaBy(f GetFunc) string {
+func GetMetaBy(f GetValFunc) string {
 	v := f(KeyMetaBy)
 	if v == nil {
 		return ""
