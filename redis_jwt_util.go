@@ -253,7 +253,9 @@ func (j *RedisJwtUtil) ClearRedisCachesByKeyPattern(keyPattern string) {
 				clearRedisByKeyPattern(ctx, client, keyPattern)
 				return nil
 			})
-			panic(err)
+			if err != nil {
+				panic(err)
+			}
 		} else {
 			clearRedisByKeyPattern(j.Ctx, j.RedisClient, keyPattern)
 		}
