@@ -1,24 +1,24 @@
 package auth
 
 type CheckAuthResult struct {
-	SkippedAuthCheck bool        `json:"skippedAuthCheck,omitempty"`
-	User             *JwtUser    `json:"user,omitempty"`
-	CustomAuth       interface{} `json:"customAuth,omitempty"`
+	SkippedAuthCheck bool        `json:"skippedAuthCheck"`
+	User             *JwtUser    `json:"user"`
+	CustomAuth       interface{} `json:"customAuth"`
 }
 
 type CheckPermResult struct {
-	SkippedAuthCheck bool        `json:"skippedAuthCheck,omitempty"`
-	User             *JwtUser    `json:"user,omitempty"`
-	CustomAuth       interface{} `json:"customAuth,omitempty"`
-	CustomPerm       interface{} `json:"customPerm,omitempty"`
+	SkippedAuthCheck bool        `json:"skippedAuthCheck"`
+	User             *JwtUser    `json:"user"`
+	CustomAuth       interface{} `json:"customAuth"`
+	CustomPerm       interface{} `json:"customPerm"`
 }
 
 type CheckClientAuthResult struct {
-	ClientAuthOk bool `json:"clientAuthOk,omitempty"`
+	ClientAuthOk bool `json:"clientAuthOk"`
 }
 
 type CheckClientPermResult struct {
-	ClientPermOk bool `json:"clientPermOk,omitempty"`
+	ClientPermOk bool `json:"clientPermOk"`
 }
 
 type Result interface {
@@ -26,22 +26,22 @@ type Result interface {
 }
 
 type PagedResult struct {
-	Items    []any `json:"items,omitempty"`
-	Total    int   `json:"total,omitempty"`
-	Page     int   `json:"page,omitempty"`
-	PageSize int   `json:"pageSize,omitempty"`
+	Items    []any `json:"items"`
+	Total    int   `json:"total"`
+	Page     int   `json:"page"`
+	PageSize int   `json:"pageSize"`
 }
 
 type HttpResult struct {
-	Code    int    `json:"code,omitempty"`
-	Message string `json:"message,omitempty"`
-	Success bool   `json:"success,omitempty"`
-	Result  any    `json:"result,omitempty"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Success bool   `json:"success"`
+	Result  any    `json:"result"`
 }
 
 type HttpResponse[T Result] struct {
-	Code    int    `json:"code,omitempty"`
-	Message string `json:"message,omitempty"`
-	Success bool   `json:"success,omitempty"`
-	Result  *T     `json:"result,omitempty"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Success bool   `json:"success"`
+	Result  *T     `json:"result"`
 }
