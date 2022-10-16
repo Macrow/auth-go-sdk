@@ -2,7 +2,6 @@ package auth
 
 import (
 	"encoding/base64"
-	"errors"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -43,7 +42,7 @@ func ParseClientToken(clientToken string) (clientId string, clientSecret string,
 	idAndSecret := string(output)
 	split := strings.Split(idAndSecret, ClientIdAndSecretSplitter)
 	if len(split) != 2 {
-		return "", "", errors.New(MsgClientTokenFail)
+		return "", "", ErrClientTokenFail
 	}
 	return split[0], split[1], nil
 }
@@ -52,14 +51,26 @@ func GenerateClientToken(clientId string, clientSecret string) string {
 	return base64.StdEncoding.EncodeToString([]byte(clientId + ClientIdAndSecretSplitter + clientSecret))
 }
 
-func ExtractCommonHeader(f GetHeaderFun, header string) string {
-	return f(header)
+func ExtractAccessCode(f GetHeaderFun, header string) (string, error) {
+	val := f(header)
+	if len(val) == 0 {
+		return "", ErrAccessCodeEmpty
+	}
+	return val, nil
+}
+
+func ExtractRandomKey(f GetHeaderFun, header string) (string, error) {
+	val := f(header)
+	if len(val) == 0 {
+		return "", ErrRandomKeyEmpty
+	}
+	return val, nil
 }
 
 func ExtractUserToken(fun GetHeaderFun, header, headerSchema string) (string, error) {
 	schemaAndToken := fun(header)
 	if len(schemaAndToken) == 0 || !strings.HasPrefix(schemaAndToken, headerSchema+" ") {
-		return "", errors.New(MsgUserTokenEmpty)
+		return "", ErrUserTokenEmpty
 	}
 	return schemaAndToken[len(headerSchema)+1:], nil
 }
@@ -70,7 +81,7 @@ func ExtractClientInfoAndToken(f GetHeaderFun, header, headerSchema string) (cli
 	schemaAndToken = f(header)
 	err = nil
 	if len(schemaAndToken) == 0 || !strings.HasPrefix(schemaAndToken, headerSchema+" ") {
-		err = errors.New(MsgClientTokenEmpty)
+		err = ErrClientTokenEmpty
 		return
 	}
 	clientId, clientSecret, err = ParseClientToken(schemaAndToken[len(headerSchema)+1:])

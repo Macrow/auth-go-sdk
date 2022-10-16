@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"github.com/go-logr/logr"
 	"github.com/imroc/req/v3"
 )
 
@@ -45,6 +46,12 @@ func WithAuditingConfig(config Auditing) ClientOption {
 	}
 }
 
+func WithLogger(logger logr.Logger) ClientOption {
+	return func(client *HttpClient) {
+		client.logger = logger
+	}
+}
+
 func NewHttpClient(AuthServiceBaseUrl string, CurrentServiceName string, options ...ClientOption) *HttpClient {
 	client := &HttpClient{
 		Config: &HttpClientConfig{
@@ -77,6 +84,9 @@ func NewHttpClient(AuthServiceBaseUrl string, CurrentServiceName string, options
 	}
 	for _, opt := range options {
 		opt(client)
+	}
+	if client.logger.GetSink() == nil {
+		client.logger = logr.Discard()
 	}
 	client.Agent = req.C().SetBaseURL(AuthServiceBaseUrl)
 	return client

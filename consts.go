@@ -1,6 +1,7 @@
 package auth
 
 const (
+	CodeSuccess              = 0
 	DefaultCachePrefix       = "Jwt"
 	DefaultCacheSplitter     = "::"
 	DefaultIssuer            = "auth-go-sdk"
@@ -20,20 +21,6 @@ const (
 	JwtTokenClaimsExpireAt    = "exp"
 	ClientIdAndSecretSplitter = "@"
 	DidAndIatJoiner           = "-"
-
-	MsgServerFail            = "访问服务失败"
-	MsgAuthServerFail        = "访问鉴权服务失败"
-	MsgClientAccessCodeEmpty = "未提供客户端访问码"
-	MsgUserTokenEmpty        = "未提供用户令牌"
-	MsgClientTokenEmpty      = "未提供客户端令牌"
-	MsgClientIdOrSecretEmpty = "未提供客户端Id和秘钥"
-	MsgUserTokenFail         = "用户令牌错误或失效"
-	MsgClientTokenFail       = "客户端验证失败"
-	MsgAuthFail              = "身份验证失败"
-	MsgPermFail              = "权限验证失败"
-	MsgInternalError         = "服务内部错误"
-	MsgJwtErrFormat          = "令牌格式错误"
-	MsgJwtErrVersion         = "令牌版本错误"
 
 	UrlPostCheckAuth             = "/current/jwt"
 	UrlPostCheckPermByCode       = "/current/check-operation"

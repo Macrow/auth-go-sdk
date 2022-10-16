@@ -4,12 +4,12 @@ type LocalAuthChecker struct {
 	Config *LocalAuthCheckerConfig
 }
 
-func (c *LocalAuthChecker) ExtractAccessCode(f GetHeaderFun) string {
-	return ExtractCommonHeader(f, c.Config.LocalAccessCode.Header)
+func (c *LocalAuthChecker) ExtractAccessCode(f GetHeaderFun) (string, error) {
+	return ExtractAccessCode(f, c.Config.LocalAccessCode.Header)
 }
 
-func (c *LocalAuthChecker) ExtractRandomKey(f GetHeaderFun) string {
-	return ExtractCommonHeader(f, c.Config.LocalRandomKey.Header)
+func (c *LocalAuthChecker) ExtractRandomKey(f GetHeaderFun) (string, error) {
+	return ExtractRandomKey(f, c.Config.LocalAccessCode.Header)
 }
 
 func (c *LocalAuthChecker) ExtractUserToken(f GetHeaderFun) (string, error) {

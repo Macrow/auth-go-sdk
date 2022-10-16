@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rsa"
 	"encoding/json"
-	"errors"
 	"github.com/go-redis/redis/v8"
 	"github.com/go-redis/redis_rate/v9"
 	"github.com/golang-jwt/jwt/v4"
@@ -76,17 +75,17 @@ func (j *RedisJwtUtil) GenerateJwt(id, username, kind, deviceId string, issueAt 
 func (j *RedisJwtUtil) ValidateJwt(tokenString string) (*JwtUser, error) {
 	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
 		if method, ok := t.Method.(*jwt.SigningMethodRSA); !ok || method.Alg() != "RS256" {
-			return nil, errors.New(MsgJwtErrFormat)
+			return nil, ErrJwtErrFormat
 		}
 		return j.PublicKey, nil
 	})
 	if err != nil || token == nil || !token.Valid {
-		return nil, errors.New(MsgJwtErrFormat)
+		return nil, ErrJwtErrFormat
 	}
 	// 解析令牌并存储为JwtUser格式
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return nil, errors.New(MsgJwtErrFormat)
+		return nil, ErrJwtErrFormat
 	}
 
 	if claims[JwtTokenClaimsId] == nil ||
@@ -96,7 +95,7 @@ func (j *RedisJwtUtil) ValidateJwt(tokenString string) (*JwtUser, error) {
 		claims[JwtTokenClaimsIssuer] == nil ||
 		claims[JwtTokenClaimsIssueAt] == nil ||
 		claims[JwtTokenClaimsExpireAt] == nil {
-		return nil, errors.New(MsgJwtErrVersion)
+		return nil, ErrJwtErrVersion
 	}
 
 	jwtUser := &JwtUser{
@@ -267,7 +266,7 @@ func (j *RedisJwtUtil) RateLimitBySecond(key string, timesPerSecond int) error {
 		return err
 	}
 	if res.Allowed == 0 {
-		return RateLimitError
+		return ErrRateLimit
 	}
 	return nil
 }
@@ -278,7 +277,7 @@ func (j *RedisJwtUtil) RateLimitByMinute(key string, timesPerMinute int) error {
 		return err
 	}
 	if res.Allowed == 0 {
-		return RateLimitError
+		return ErrRateLimit
 	}
 	return nil
 }

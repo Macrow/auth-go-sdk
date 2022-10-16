@@ -14,262 +14,256 @@ type HttpClient struct {
 	logger logr.Logger
 }
 
-func handleErrorAndGetResult[T Result](res *req.Response, logger logr.Logger, result *HttpResponse[T], defaultRes *T) *T {
-	if defaultRes == nil {
-		logger.Error(NoAuthError, "默认返回数据错误")
+func handleError[T Result](res *req.Response, result *HttpResponse[T], logger logr.Logger, validateResultIsNull bool) error {
+	if res == nil {
+		logger.Error(ErrInternalError, ErrInternalError.Error())
+		return ErrInternalError
 	}
 	if res.Err != nil {
-		logger.Error(res.Err, MsgAuthServerFail)
-		return defaultRes
+		logger.Error(res.Err, res.Err.Error())
+		return res.Err
 	}
 	if res.StatusCode != http.StatusOK {
-		logger.Error(NoAuthError, MsgAuthServerFail)
-		return defaultRes
+		logger.Error(ErrAuthServerFail, ErrAuthServerFail.Error())
+		return ErrAuthServerFail
 	}
 	if result == nil {
-		logger.Error(NoAuthError, "解析返回结果错误")
+		logger.Error(ErrNoResult, ErrNoResult.Error())
+		return ErrNoResult
 	}
-	if result.Code != 0 {
-		logger.Error(NoAuthError, result.Message)
-		return defaultRes
+	if result.Code != CodeSuccess {
+		return errors.New(result.Message)
 	}
-	return &result.Result
+	if validateResultIsNull && result.Result == nil {
+		return ErrNoResult
+	}
+	return nil
 }
 
-func (c *HttpClient) initAccessCodeAndRandomKey(f GetHeaderFun) error {
+func (c *HttpClient) initAccessCodeAndRandomKey(f GetHeaderFun, r *req.Request) error {
 	if c.Config.AccessCode.Enable {
 		if f == nil {
 			if len(c.Config.Client.AccessCode) == 0 {
-				return errors.New(MsgClientAccessCodeEmpty)
+				return ErrAccessCodeEmpty
 			}
-			c.Agent.SetCommonHeader(c.Config.AccessCode.Header, c.Config.Client.AccessCode)
+			r.SetHeader(c.Config.AccessCode.Header, c.Config.Client.AccessCode)
 		} else {
-			c.Agent.SetCommonHeader(c.Config.AccessCode.Header, ExtractCommonHeader(f, c.Config.AccessCode.Header))
+			accessCode, err := ExtractAccessCode(f, c.Config.AccessCode.Header)
+			if err != nil {
+				return err
+			}
+			r.SetHeader(c.Config.AccessCode.Header, accessCode)
 		}
 	}
 	if c.Config.RandomKey.Enable {
 		if f == nil {
-			c.Agent.SetCommonHeader(c.Config.RandomKey.Header, GenerateRandomKey())
+			r.SetHeader(c.Config.RandomKey.Header, GenerateRandomKey())
 		} else {
-			c.Agent.SetCommonHeader(c.Config.RandomKey.Header, ExtractCommonHeader(f, c.Config.RandomKey.Header))
+			randomKey, err := ExtractRandomKey(f, c.Config.RandomKey.Header)
+			if err != nil {
+				return err
+			}
+			r.SetHeader(c.Config.RandomKey.Header, randomKey)
 		}
 	}
 	return nil
 }
 
-func (c *HttpClient) initUserToken(f GetHeaderFun) (string, error) {
+func (c *HttpClient) initUserToken(f GetHeaderFun, r *req.Request) (string, error) {
 	token, err := ExtractUserToken(f, c.Config.User.Header, c.Config.User.HeaderSchema)
 	if err != nil && !c.Config.AccessCode.SkipUserTokenCheck {
 		return "", err
 	}
-	c.Agent.SetCommonHeader(c.Config.User.Header, c.Config.User.HeaderSchema+" "+token)
+	r.SetHeader(c.Config.User.Header, c.Config.User.HeaderSchema+" "+token)
 	return token, nil
 }
 
-func (c *HttpClient) initClientToken(f GetHeaderFun) (string, error) {
+func (c *HttpClient) initClientToken(f GetHeaderFun, r *req.Request) (string, error) {
 	clientId := ""
 	if c.Config.Client.EnableIdAndSecret {
 		if f == nil {
 			if len(c.Config.Client.Id) == 0 || len(c.Config.Client.Secret) == 0 {
-				return clientId, errors.New(MsgClientIdOrSecretEmpty)
+				return clientId, ErrClientIdOrSecretEmpty
 			}
-			c.Agent.SetCommonHeader(c.Config.Client.Header, c.Config.Client.HeaderSchema+" "+GenerateClientToken(c.Config.Client.Id, c.Config.Client.Secret))
+			r.SetHeader(c.Config.Client.Header, c.Config.Client.HeaderSchema+" "+GenerateClientToken(c.Config.Client.Id, c.Config.Client.Secret))
 		} else {
 			clientId, _, schemaAndToken, err := ExtractClientInfoAndToken(f, c.Config.Client.Header, c.Config.Client.HeaderSchema)
 			if err != nil {
 				return clientId, err
 			}
-			c.Agent.SetCommonHeader(c.Config.Client.Header, schemaAndToken)
+			r.SetHeader(c.Config.Client.Header, schemaAndToken)
 		}
 	}
 	return clientId, nil
 }
 
-func (c *HttpClient) CheckAuth(f GetHeaderFun, fulfillCustomAuth bool) *CheckAuthResult {
-	errRes := &CheckAuthResult{
-		SkippedAuthCheck: false,
-		User:             nil,
-		CustomAuth:       nil,
-	}
-	err := c.initAccessCodeAndRandomKey(f)
+func (c *HttpClient) CheckAuth(f GetHeaderFun, fulfillCustomAuth bool) (*CheckAuthResult, error) {
+	r := c.Agent.Post(UrlPostCheckAuth)
+	err := c.initAccessCodeAndRandomKey(f, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
-		return errRes
+		return nil, err
 	}
-	token, err := c.initUserToken(f)
+	token, err := c.initUserToken(f, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
-		return errRes
+		return nil, err
 	}
 	result := &HttpResponse[CheckAuthResult]{}
-	res := c.Agent.
-		Post(UrlPostCheckAuth).
+	res := r.
 		SetResult(result).
-		SetQueryParam("fulfillCustomAuth", strconv.FormatBool(fulfillCustomAuth)).
+		SetFormDataAnyType(map[string]interface{}{"fulfillCustomAuth": strconv.FormatBool(fulfillCustomAuth)}).
 		Do()
-	handledRes := handleErrorAndGetResult[CheckAuthResult](res, c.logger, result, errRes)
-	if handledRes.User != nil {
-		handledRes.User.Token = token
+	err = handleError[CheckAuthResult](res, result, c.logger, true)
+	if err != nil {
+		return nil, err
 	}
-	return handledRes
+	if result.Result.User != nil {
+		result.Result.User.Token = token
+	}
+	return result.Result, nil
 }
 
-func (c *HttpClient) CheckPermByCode(f GetHeaderFun, code string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) *CheckPermResult {
-	errRes := &CheckPermResult{
-		SkippedAuthCheck: false,
-		User:             nil,
-		CustomAuth:       nil,
-		CustomPerm:       nil,
-	}
-	err := c.initAccessCodeAndRandomKey(f)
+func (c *HttpClient) CheckPermByCode(f GetHeaderFun, code string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) (*CheckPermResult, error) {
+	r := c.Agent.Post(UrlPostCheckPermByCode)
+	err := c.initAccessCodeAndRandomKey(f, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
-		return errRes
+		return nil, err
 	}
-	token, err := c.initUserToken(f)
+	token, err := c.initUserToken(f, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
-		return errRes
+		return nil, err
 	}
 	result := &HttpResponse[CheckPermResult]{}
-	formData := make(map[string]string, 4)
+	formData := make(map[string]any, 4)
 	formData["code"] = code
-	formData["fulfillJwt"] = strconv.FormatBool(fulfillJwt)
-	formData["fulfillCustomAuth"] = strconv.FormatBool(fulfillCustomAuth)
-	formData["fulfillCustomPerm"] = strconv.FormatBool(fulfillCustomPerm)
-	res := c.Agent.
-		Post(UrlPostCheckPermByCode).
+	formData["fulfillJwt"] = fulfillJwt
+	formData["fulfillCustomAuth"] = fulfillCustomAuth
+	formData["fulfillCustomPerm"] = fulfillCustomPerm
+	res := r.
 		SetResult(result).
-		SetFormData(formData).
+		SetFormDataAnyType(formData).
 		Do()
-	handledRes := handleErrorAndGetResult[CheckPermResult](res, c.logger, result, errRes)
-	if handledRes.User != nil {
-		handledRes.User.Token = token
+	err = handleError[CheckPermResult](res, result, c.logger, true)
+	if err != nil {
+		return nil, err
 	}
-	return handledRes
+	if result.Result.User != nil {
+		result.Result.User.Token = token
+	}
+	return result.Result, nil
 }
 
-func (c *HttpClient) CheckPermByAction(f GetHeaderFun, service string, method string, path string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) *CheckPermResult {
-	errRes := &CheckPermResult{
-		SkippedAuthCheck: false,
-		User:             nil,
-		CustomAuth:       nil,
-		CustomPerm:       nil,
-	}
-	err := c.initAccessCodeAndRandomKey(f)
+func (c *HttpClient) CheckPermByAction(f GetHeaderFun, service string, method string, path string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) (*CheckPermResult, error) {
+	r := c.Agent.Post(UrlPostCheckPermByAction)
+	err := c.initAccessCodeAndRandomKey(f, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
-		return errRes
+		return nil, err
 	}
-	token, err := c.initUserToken(f)
+	token, err := c.initUserToken(f, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
-		return errRes
+		return nil, err
 	}
 	result := &HttpResponse[CheckPermResult]{}
-	formData := make(map[string]string, 6)
+	formData := make(map[string]any, 6)
 	formData["service"] = service
 	formData["method"] = method
 	formData["path"] = path
-	formData["fulfillJwt"] = strconv.FormatBool(fulfillJwt)
-	formData["fulfillCustomAuth"] = strconv.FormatBool(fulfillCustomAuth)
-	formData["fulfillCustomPerm"] = strconv.FormatBool(fulfillCustomPerm)
-	res := c.Agent.
-		Post(UrlPostCheckPermByAction).
+	formData["fulfillJwt"] = fulfillJwt
+	formData["fulfillCustomAuth"] = fulfillCustomAuth
+	formData["fulfillCustomPerm"] = fulfillCustomPerm
+	res := r.
 		SetResult(result).
-		SetFormData(formData).
+		SetFormDataAnyType(formData).
 		Do()
-	handledRes := handleErrorAndGetResult[CheckPermResult](res, c.logger, result, errRes)
-	if handledRes.User != nil {
-		handledRes.User.Token = token
+	err = handleError[CheckPermResult](res, result, c.logger, true)
+	if err != nil {
+		return nil, err
 	}
-	return handledRes
+	if result.Result.User != nil {
+		result.Result.User.Token = token
+	}
+	return result.Result, nil
 }
 
-func (c *HttpClient) CheckClientAuth(f GetHeaderFun) *CheckClientAuthResult {
-	errRes := &CheckClientAuthResult{
-		ClientAuthOk: false,
-	}
-	err := c.initAccessCodeAndRandomKey(f)
+func (c *HttpClient) CheckClientAuth(f GetHeaderFun) (*CheckClientAuthResult, error) {
+	r := c.Agent.Post(UrlPostCheckClientAuth)
+	err := c.initAccessCodeAndRandomKey(f, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
-		return errRes
+		return nil, err
 	}
-	_, err = c.initClientToken(f)
+	_, err = c.initClientToken(f, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
-		return errRes
+		return nil, err
 	}
 	result := &HttpResponse[CheckClientAuthResult]{}
-	res := c.Agent.
-		Post(UrlPostCheckClientAuth).
+	res := r.
 		SetResult(result).
 		Do()
-	return handleErrorAndGetResult[CheckClientAuthResult](res, c.logger, result, errRes)
+	err = handleError[CheckClientAuthResult](res, result, c.logger, true)
+	if err != nil {
+		return nil, err
+	}
+	return result.Result, nil
 }
 
-func (c *HttpClient) CheckClientPermByCode(f GetHeaderFun, code string) *CheckClientPermResult {
-	errRes := &CheckClientPermResult{
-		ClientPermOk: false,
-	}
-	err := c.initAccessCodeAndRandomKey(f)
+func (c *HttpClient) CheckClientPermByCode(f GetHeaderFun, code string) (*CheckClientPermResult, error) {
+	r := c.Agent.Post(UrlPostCheckClientPermByCode)
+	err := c.initAccessCodeAndRandomKey(f, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
-		return errRes
+		return nil, err
 	}
-	_, err = c.initClientToken(f)
+	_, err = c.initClientToken(f, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
-		return errRes
+		return nil, err
 	}
 	result := &HttpResponse[CheckClientPermResult]{}
-	formData := make(map[string]string, 1)
+	formData := make(map[string]any, 1)
 	formData["code"] = code
-	res := c.Agent.
-		Post(UrlPostCheckClientPermByCode).
+	res := r.
 		SetResult(result).
-		SetFormData(formData).
+		SetFormDataAnyType(formData).
 		Do()
-	return handleErrorAndGetResult[CheckClientPermResult](res, c.logger, result, errRes)
+	err = handleError[CheckClientPermResult](res, result, c.logger, true)
+	if err != nil {
+		return nil, err
+	}
+	return result.Result, nil
 }
 
-func (c *HttpClient) ruest(url string, queryParam map[string]string, formData map[string]string) HttpResponse[interface{}] {
-	errRes := HttpResponse[interface{}]{
-		Code:    1,
-		Message: MsgInternalError,
-		Success: false,
-		Result:  nil,
-	}
-	err := c.initAccessCodeAndRandomKey(nil)
+func (c *HttpClient) ClientRequest(urlPath string, httpMethod string, queryParam map[string]any, formData map[string]any) (any, error) {
+	r := c.Agent.R()
+	err := c.initAccessCodeAndRandomKey(nil, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
-		return errRes
+		return nil, err
 	}
-	_, err = c.initClientToken(nil)
+	_, err = c.initClientToken(nil, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
-		return errRes
+		return nil, err
 	}
-	result := &HttpResponse[interface{}]{}
-	res := c.Agent.
-		Post(url).
-		SetResult(result).
-		SetQueryParams(queryParam).
-		SetFormData(formData).
-		Do()
+	result := &HttpResponse[any]{}
 
-	if res.Err != nil {
-		c.logger.Error(res.Err, MsgServerFail)
-		errRes.Message = res.Err.Error()
-		return errRes
+	r.Method = httpMethod
+	r.RawURL = urlPath
+
+	res := r.
+		SetResult(result).
+		SetQueryParamsAnyType(queryParam).
+		SetFormDataAnyType(formData).
+		Do()
+	err = handleError[any](res, result, c.logger, false)
+	if err != nil {
+		return nil, err
 	}
-	if res.StatusCode != http.StatusOK {
-		c.logger.Error(NoAuthError, MsgServerFail)
-		errRes.Message = res.Err.Error()
-		return errRes
-	}
-	if result == nil {
-		c.logger.Error(NoAuthError, "解析返回结果错误")
-	}
-	return *result
+	return result.Result, nil
 }
