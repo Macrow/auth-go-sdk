@@ -267,7 +267,7 @@ func (j *RedisJwtUtil) RateLimitBySecond(key string, timesPerSecond int) error {
 		return err
 	}
 	if res.Allowed == 0 {
-		return errors.New("访问过于频繁")
+		return RateLimitError
 	}
 	return nil
 }
@@ -278,7 +278,7 @@ func (j *RedisJwtUtil) RateLimitByMinute(key string, timesPerMinute int) error {
 		return err
 	}
 	if res.Allowed == 0 {
-		return errors.New("访问过于频繁")
+		return RateLimitError
 	}
 	return nil
 }

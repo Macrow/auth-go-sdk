@@ -2,7 +2,11 @@ package auth
 
 import (
 	"context"
+	"errors"
 )
+
+var NoAuthError = errors.New("权限验证失败")
+var RateLimitError = errors.New("访问过于频繁")
 
 // IAuthCheck 实现本地验证服务，所有方法都不抛出异常，如果权限检查失败，jwtUser返回nil
 type IAuthCheck interface {

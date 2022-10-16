@@ -16,21 +16,21 @@ type HttpClient struct {
 
 func handleErrorAndGetResult[T Result](res *req.Response, logger logr.Logger, result *HttpResponse[T], defaultRes *T) *T {
 	if defaultRes == nil {
-		logger.Error(nil, "默认返回数据错误")
+		logger.Error(NoAuthError, "默认返回数据错误")
 	}
 	if res.Err != nil {
 		logger.Error(res.Err, MsgAuthServerFail)
 		return defaultRes
 	}
 	if res.StatusCode != http.StatusOK {
-		logger.Error(nil, MsgAuthServerFail)
+		logger.Error(NoAuthError, MsgAuthServerFail)
 		return defaultRes
 	}
 	if result == nil {
-		logger.Error(nil, "解析返回结果错误")
+		logger.Error(NoAuthError, "解析返回结果错误")
 	}
 	if result.Code != 0 {
-		logger.Error(nil, result.Message)
+		logger.Error(NoAuthError, result.Message)
 		return defaultRes
 	}
 	return &result.Result
@@ -264,12 +264,12 @@ func (c *HttpClient) ruest(url string, queryParam map[string]string, formData ma
 		return errRes
 	}
 	if res.StatusCode != http.StatusOK {
-		c.logger.Error(nil, MsgServerFail)
+		c.logger.Error(NoAuthError, MsgServerFail)
 		errRes.Message = res.Err.Error()
 		return errRes
 	}
 	if result == nil {
-		c.logger.Error(nil, "解析返回结果错误")
+		c.logger.Error(NoAuthError, "解析返回结果错误")
 	}
 	return *result
 }
