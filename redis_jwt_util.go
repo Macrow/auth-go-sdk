@@ -163,7 +163,7 @@ func (j *RedisJwtUtil) DelJwtByUserIdAndDeviceId(id, did string) {
 }
 
 func (j *RedisJwtUtil) DelJwtByUserIdAndDeviceIdAndIat(id, did string, iat float64) {
-	j.ClearRedisCachesByKeyPattern(j.GetUserJwtCacheKey(id, did, iat) + "*")
+	j.ClearRedisCachesByKey(j.GetUserJwtCacheKey(id, did, iat))
 }
 
 func (j *RedisJwtUtil) SetJwtUser(jwtUser *JwtUser) {
