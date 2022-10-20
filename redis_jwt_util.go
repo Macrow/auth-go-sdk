@@ -167,7 +167,11 @@ func (j *RedisJwtUtil) DelJwtByUserIdAndDeviceIdAndIat(id, did string, iat float
 }
 
 func (j *RedisJwtUtil) SetJwtUser(jwtUser *JwtUser) {
-	j.SetObjInRedis(j.GetUserJwtCacheKey(jwtUser.Id, jwtUser.Did, jwtUser.Iat), jwtUser, j.Config.ExpireInMinutes)
+	marshal, err := json.Marshal(jwtUser)
+	if err != nil {
+		panic(err)
+	}
+	j.SetObjInRedis(j.GetUserJwtCacheKey(jwtUser.Id, jwtUser.Did, jwtUser.Iat), marshal, j.Config.ExpireInMinutes)
 }
 
 func (j *RedisJwtUtil) GetJwtUserByUserId(key string) *JwtUser {
@@ -176,7 +180,7 @@ func (j *RedisJwtUtil) GetJwtUserByUserId(key string) *JwtUser {
 		return nil
 	}
 	var jwtUser JwtUser
-	err := json.Unmarshal(obj, &jwtUser)
+	err := json.Unmarshal(obj.([]byte), &jwtUser)
 	if err != nil {
 		panic(err)
 	}
@@ -199,29 +203,31 @@ func (j *RedisJwtUtil) ClearRedisCachesByKey(key string) {
 	}
 }
 
-func (j *RedisJwtUtil) GetObjInRedis(key string) []byte {
+func (j *RedisJwtUtil) GetObjInRedis(key string) interface{} {
 	if j.IsRedisCluster() {
 		res, err := j.RedisClusterClient.Do(j.Ctx, "GET", key).Result()
+		if err == redis.Nil {
+			return nil
+		}
 		if err != nil {
 			panic(err)
 		}
-		return res.([]byte)
+		return res
 	} else {
 		res, err := j.RedisClient.Do(j.Ctx, "GET", key).Result()
+		if err == redis.Nil {
+			return nil
+		}
 		if err != nil {
 			panic(err)
 		}
-		return res.([]byte)
+		return res
 	}
 }
 
 func (j *RedisJwtUtil) SetObjInRedis(key string, obj interface{}, expiredInMinutes int) {
-	marshal, err := json.Marshal(obj)
-	if err != nil {
-		panic(err)
-	}
 	if j.IsRedisCluster() {
-		_, err := j.RedisClusterClient.Do(j.Ctx, "SET", key, marshal).Result()
+		_, err := j.RedisClusterClient.Do(j.Ctx, "SET", key, obj).Result()
 		if err != nil {
 			panic(err)
 		}
@@ -232,7 +238,7 @@ func (j *RedisJwtUtil) SetObjInRedis(key string, obj interface{}, expiredInMinut
 			}
 		}
 	} else {
-		_, err := j.RedisClient.Do(j.Ctx, "SET", key, marshal).Result()
+		_, err := j.RedisClient.Do(j.Ctx, "SET", key, obj).Result()
 		if err != nil {
 			panic(err)
 		}
