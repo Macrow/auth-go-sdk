@@ -46,13 +46,13 @@ func WithAuditingConfig(config Auditing) ClientOption {
 	}
 }
 
-func WithLogger(logger logr.Logger) ClientOption {
+func WithHttpClientLogger(logger logr.Logger) ClientOption {
 	return func(client *HttpClient) {
 		client.logger = logger
 	}
 }
 
-func NewHttpClient(AuthServiceBaseUrl string, CurrentServiceName string, options ...ClientOption) *HttpClient {
+func NewHttpClient(AuthServiceBaseUrl string, CurrentServiceName string, aesKey string, options ...ClientOption) *HttpClient {
 	client := &HttpClient{
 		Config: &HttpClientConfig{
 			Service: Service{
@@ -81,6 +81,7 @@ func NewHttpClient(AuthServiceBaseUrl string, CurrentServiceName string, options
 				MetaBy: DefaultMetaBy,
 			},
 		},
+		AesUtil: NewAesUtil(aesKey),
 	}
 	for _, opt := range options {
 		opt(client)

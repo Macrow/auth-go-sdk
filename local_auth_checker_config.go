@@ -1,13 +1,15 @@
 package auth
 
 type LocalAccessCode struct {
-	Enable bool
-	Header string
+	Enable         bool
+	Header         string
+	EncryptContent bool
 }
 
 type LocalRandomKey struct {
-	Enable bool
-	Header string
+	Enable         bool
+	Header         string
+	EncryptContent bool
 }
 
 type LocalUser struct {
@@ -19,6 +21,7 @@ type LocalClient struct {
 	EnableIdAndSecret bool
 	Header            string
 	HeaderSchema      string
+	EncryptContent    bool
 }
 
 type LocalAuditing struct {

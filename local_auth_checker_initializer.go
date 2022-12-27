@@ -1,11 +1,14 @@
 package auth
 
+import "github.com/go-logr/logr"
+
 type LocalCheckerOption func(checker *LocalAuthChecker)
 
 func WithLocalAccessCodeConfig(config LocalAccessCode) LocalCheckerOption {
 	return func(checker *LocalAuthChecker) {
 		checker.Config.LocalAccessCode.Enable = config.Enable
 		checker.Config.LocalAccessCode.Header = GetNonEmptyValueWithBackup(config.Header, DefaultHeaderAccessCode)
+		checker.Config.LocalAccessCode.EncryptContent = config.EncryptContent
 	}
 }
 
@@ -13,6 +16,7 @@ func WithLocalRandomKeyConfig(config LocalRandomKey) LocalCheckerOption {
 	return func(checker *LocalAuthChecker) {
 		checker.Config.LocalRandomKey.Enable = config.Enable
 		checker.Config.LocalRandomKey.Header = GetNonEmptyValueWithBackup(config.Header, DefaultHeaderRandomKey)
+		checker.Config.LocalRandomKey.EncryptContent = config.EncryptContent
 	}
 }
 
@@ -28,6 +32,7 @@ func WithLocalClientConfig(config LocalClient) LocalCheckerOption {
 		checker.Config.LocalClient.EnableIdAndSecret = config.EnableIdAndSecret
 		checker.Config.LocalClient.Header = GetNonEmptyValueWithBackup(config.Header, DefaultHeaderClientToken)
 		checker.Config.LocalClient.HeaderSchema = GetNonEmptyValueWithBackup(config.HeaderSchema, DefaultHeaderSchema)
+		checker.Config.LocalClient.EncryptContent = config.EncryptContent
 	}
 }
 
@@ -37,16 +42,24 @@ func WithLocalAuditingConfig(config LocalAuditing) LocalCheckerOption {
 	}
 }
 
-func NewLocalAuthChecker(options ...LocalCheckerOption) *LocalAuthChecker {
+func WithAuthCheckerLogger(logger logr.Logger) LocalCheckerOption {
+	return func(checker *LocalAuthChecker) {
+		checker.logger = logger
+	}
+}
+
+func NewLocalAuthChecker(aesKey string, options ...LocalCheckerOption) *LocalAuthChecker {
 	checker := &LocalAuthChecker{
 		Config: &LocalAuthCheckerConfig{
 			LocalAccessCode: LocalAccessCode{
-				Enable: false,
-				Header: DefaultHeaderAccessCode,
+				Enable:         false,
+				Header:         DefaultHeaderAccessCode,
+				EncryptContent: false,
 			},
 			LocalRandomKey: LocalRandomKey{
-				Enable: false,
-				Header: DefaultHeaderRandomKey,
+				Enable:         false,
+				Header:         DefaultHeaderRandomKey,
+				EncryptContent: false,
 			},
 			LocalUser: LocalUser{
 				Header:       DefaultHeaderUserToken,
@@ -56,14 +69,19 @@ func NewLocalAuthChecker(options ...LocalCheckerOption) *LocalAuthChecker {
 				EnableIdAndSecret: true,
 				Header:            DefaultHeaderClientToken,
 				HeaderSchema:      DefaultHeaderSchema,
+				EncryptContent:    false,
 			},
 			LocalAuditing: LocalAuditing{
 				MetaBy: DefaultMetaBy,
 			},
 		},
+		AesUtil: NewAesUtil(aesKey),
 	}
 	for _, opt := range options {
 		opt(checker)
+	}
+	if checker.logger.GetSink() == nil {
+		checker.logger = logr.Discard()
 	}
 	return checker
 }

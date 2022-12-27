@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/base64"
+	"github.com/go-logr/logr"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -34,12 +35,21 @@ func GenerateRandomKey() string {
 	return output
 }
 
-func ParseClientToken(clientToken string) (clientId string, clientSecret string, err error) {
-	output, err := base64.StdEncoding.DecodeString(clientToken)
-	if err != nil {
-		panic(err)
+func ParseClientToken(clientToken string, encryptContent bool, aesUtil *AesUtil, logger logr.Logger) (clientId string, clientSecret string, err error) {
+	var idAndSecret string
+	if encryptContent && aesUtil != nil {
+		idAndSecret, err = aesUtil.decrypt(clientToken)
+		if err != nil {
+			logger.Error(err, err.Error())
+			return "", "", ErrDecryptFail
+		}
+	} else {
+		bytes, err := base64.StdEncoding.DecodeString(clientToken)
+		if err != nil {
+			panic(err)
+		}
+		idAndSecret = string(bytes)
 	}
-	idAndSecret := string(output)
 	split := strings.Split(idAndSecret, ClientIdAndSecretSplitter)
 	if len(split) != 2 {
 		return "", "", ErrClientTokenFail
@@ -47,22 +57,42 @@ func ParseClientToken(clientToken string) (clientId string, clientSecret string,
 	return split[0], split[1], nil
 }
 
-func GenerateClientToken(clientId string, clientSecret string) string {
-	return base64.StdEncoding.EncodeToString([]byte(clientId + ClientIdAndSecretSplitter + clientSecret))
+func GenerateClientToken(clientId string, clientSecret string, aesUtil *AesUtil) (string, error) {
+	if aesUtil == nil {
+		return base64.StdEncoding.EncodeToString([]byte(clientId + ClientIdAndSecretSplitter + clientSecret)), nil
+	} else {
+		return aesUtil.encrypt(clientId + ClientIdAndSecretSplitter + clientSecret)
+	}
 }
 
-func ExtractAccessCode(f GetHeaderFun, header string) (string, error) {
+func ExtractAccessCode(f GetHeaderFun, header string, encryptContent bool, aesUtil *AesUtil, logger logr.Logger) (string, error) {
 	val := f(header)
 	if len(val) == 0 {
 		return "", ErrAccessCodeEmpty
 	}
+	if encryptContent && aesUtil != nil {
+		var err error
+		val, err = aesUtil.decrypt(val)
+		if err != nil {
+			logger.Error(err, err.Error())
+			return "", ErrDecryptFail
+		}
+	}
 	return val, nil
 }
 
-func ExtractRandomKey(f GetHeaderFun, header string) (string, error) {
+func ExtractRandomKey(f GetHeaderFun, header string, encryptContent bool, aesUtil *AesUtil, logger logr.Logger) (string, error) {
 	val := f(header)
 	if len(val) == 0 {
 		return "", ErrRandomKeyEmpty
+	}
+	if encryptContent && aesUtil != nil {
+		var err error
+		val, err = aesUtil.decrypt(val)
+		if err != nil {
+			logger.Error(err, err.Error())
+			return "", ErrDecryptFail
+		}
 	}
 	return val, nil
 }
@@ -75,7 +105,7 @@ func ExtractUserToken(fun GetHeaderFun, header, headerSchema string) (string, er
 	return schemaAndToken[len(headerSchema)+1:], nil
 }
 
-func ExtractClientInfoAndToken(f GetHeaderFun, header, headerSchema string) (clientId string, clientSecret string, schemaAndToken string, err error) {
+func ExtractClientInfoAndToken(f GetHeaderFun, header, headerSchema string, encryptContent bool, aesUtil *AesUtil, logger logr.Logger) (clientId string, clientSecret string, schemaAndToken string, err error) {
 	clientId = ""
 	clientSecret = ""
 	schemaAndToken = f(header)
@@ -84,7 +114,7 @@ func ExtractClientInfoAndToken(f GetHeaderFun, header, headerSchema string) (cli
 		err = ErrClientTokenEmpty
 		return
 	}
-	clientId, clientSecret, err = ParseClientToken(schemaAndToken[len(headerSchema)+1:])
+	clientId, clientSecret, err = ParseClientToken(schemaAndToken[len(headerSchema)+1:], encryptContent, aesUtil, logger)
 	return
 }
 

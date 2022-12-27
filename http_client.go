@@ -9,9 +9,10 @@ import (
 )
 
 type HttpClient struct {
-	Config *HttpClientConfig
-	Agent  *req.Client
-	logger logr.Logger
+	Config  *HttpClientConfig
+	Agent   *req.Client
+	AesUtil *AesUtil
+	logger  logr.Logger
 }
 
 func handleError[T Result](res *req.Response, result *HttpResponse[T], logger logr.Logger, validateResultIsNull bool) error {
@@ -46,24 +47,56 @@ func (c *HttpClient) initAccessCodeAndRandomKey(f GetHeaderFun, r *req.Request) 
 			if len(c.Config.Client.AccessCode) == 0 {
 				return ErrAccessCodeEmpty
 			}
-			r.SetHeader(c.Config.AccessCode.Header, c.Config.Client.AccessCode)
+			if c.Config.AccessCode.EncryptContent {
+				accessCode, err := c.AesUtil.encrypt(c.Config.Client.AccessCode)
+				if err != nil {
+					panic(err)
+				}
+				r.SetHeader(c.Config.AccessCode.Header, accessCode)
+			} else {
+				r.SetHeader(c.Config.AccessCode.Header, c.Config.Client.AccessCode)
+			}
 		} else {
-			accessCode, err := ExtractAccessCode(f, c.Config.AccessCode.Header)
+			accessCode, err := ExtractAccessCode(f, c.Config.AccessCode.Header, c.Config.AccessCode.EncryptContent, c.AesUtil, c.logger)
 			if err != nil {
 				return err
 			}
-			r.SetHeader(c.Config.AccessCode.Header, accessCode)
+			if c.Config.AccessCode.EncryptContent {
+				accessCode, err = c.AesUtil.encrypt(c.Config.Client.AccessCode)
+				if err != nil {
+					panic(err)
+				}
+				r.SetHeader(c.Config.AccessCode.Header, accessCode)
+			} else {
+				r.SetHeader(c.Config.AccessCode.Header, accessCode)
+			}
 		}
 	}
 	if c.Config.RandomKey.Enable {
 		if f == nil {
-			r.SetHeader(c.Config.RandomKey.Header, GenerateRandomKey())
+			if c.Config.RandomKey.EncryptContent {
+				randomKey, err := c.AesUtil.encrypt(GenerateRandomKey())
+				if err != nil {
+					panic(err)
+				}
+				r.SetHeader(c.Config.RandomKey.Header, randomKey)
+			} else {
+				r.SetHeader(c.Config.RandomKey.Header, GenerateRandomKey())
+			}
 		} else {
-			randomKey, err := ExtractRandomKey(f, c.Config.RandomKey.Header)
+			randomKey, err := ExtractRandomKey(f, c.Config.RandomKey.Header, c.Config.RandomKey.EncryptContent, c.AesUtil, c.logger)
 			if err != nil {
 				return err
 			}
-			r.SetHeader(c.Config.RandomKey.Header, randomKey)
+			if c.Config.RandomKey.EncryptContent {
+				randomKey, err = c.AesUtil.encrypt(randomKey)
+				if err != nil {
+					panic(err)
+				}
+				r.SetHeader(c.Config.RandomKey.Header, randomKey)
+			} else {
+				r.SetHeader(c.Config.RandomKey.Header, randomKey)
+			}
 		}
 	}
 	return nil
@@ -85,11 +118,27 @@ func (c *HttpClient) initClientToken(f GetHeaderFun, r *req.Request) (string, er
 			if len(c.Config.Client.Id) == 0 || len(c.Config.Client.Secret) == 0 {
 				return clientId, ErrClientIdOrSecretEmpty
 			}
-			r.SetHeader(c.Config.Client.Header, c.Config.Client.HeaderSchema+" "+GenerateClientToken(c.Config.Client.Id, c.Config.Client.Secret))
+			var clientToken string
+			var err error
+			if c.Config.Client.EncryptContent {
+				clientToken, err = GenerateClientToken(c.Config.Client.Id, c.Config.Client.Secret, c.AesUtil)
+			} else {
+				clientToken, err = GenerateClientToken(c.Config.Client.Id, c.Config.Client.Secret, nil)
+			}
+			if err != nil {
+				panic(err)
+			}
+			r.SetHeader(c.Config.Client.Header, c.Config.Client.HeaderSchema+" "+clientToken)
 		} else {
-			clientId, _, schemaAndToken, err := ExtractClientInfoAndToken(f, c.Config.Client.Header, c.Config.Client.HeaderSchema)
+			clientId, clientSecret, schemaAndToken, err := ExtractClientInfoAndToken(f, c.Config.Client.Header, c.Config.Client.HeaderSchema, c.Config.Client.EncryptContent, c.AesUtil, c.logger)
 			if err != nil {
 				return clientId, err
+			}
+			if c.Config.Client.EncryptContent {
+				schemaAndToken, err = GenerateClientToken(clientId, clientSecret, c.AesUtil)
+				if err != nil {
+					panic(err)
+				}
 			}
 			r.SetHeader(c.Config.Client.Header, schemaAndToken)
 		}

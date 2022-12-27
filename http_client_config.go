@@ -3,17 +3,20 @@ package auth
 type Service struct {
 	AuthServiceBaseUrl string
 	CurrentServiceName string
+	EncryptKey         string
 }
 
 type AccessCode struct {
 	Enable             bool
 	SkipUserTokenCheck bool
 	Header             string
+	EncryptContent     bool
 }
 
 type RandomKey struct {
-	Enable bool
-	Header string
+	Enable         bool
+	Header         string
+	EncryptContent bool
 }
 
 type User struct {
@@ -28,6 +31,7 @@ type Client struct {
 	AccessCode        string
 	Header            string
 	HeaderSchema      string
+	EncryptContent    bool
 }
 
 type Auditing struct {

@@ -17,6 +17,10 @@ const (
 	MsgRateLimit             = "访问过于频繁"
 	MsgAuthFail              = "身份验证失败"
 	MsgPermFail              = "权限验证失败"
+	MsgAESKeyError           = "加密key必须为16位"
+	MsgEncryptFail           = "加密身份信息失败"
+	MsgDecryptFail           = "身份信息校验失败"
+	MsgEmptyContent          = "加解密内容为空"
 )
 
 var (
@@ -34,4 +38,8 @@ var (
 	ErrRateLimit             = errors.New(MsgRateLimit)
 	ErrAuthFail              = errors.New(MsgAuthFail)
 	ErrPermFail              = errors.New(MsgPermFail)
+	ErrAESKeyFail            = errors.New(MsgAESKeyError)
+	ErrEncryptFail           = errors.New(MsgEncryptFail)
+	ErrDecryptFail           = errors.New(MsgDecryptFail)
+	ErrEmptyContent          = errors.New(MsgEmptyContent)
 )
