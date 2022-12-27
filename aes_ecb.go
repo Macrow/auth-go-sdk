@@ -123,9 +123,9 @@ func PKCS5Padding(plainText []byte, blockSize int) []byte {
 
 func PKCS5UnPadding(plainText []byte, blockSize int) ([]byte, error) {
 	length := len(plainText)
-	number := int(plainText[length-1])
-	if number >= length || number > blockSize {
+	unPadding := int(plainText[length-1])
+	if unPadding > length || unPadding > blockSize {
 		return nil, ErrDecryptFail
 	}
-	return plainText[:length-number], nil
+	return plainText[:length-unPadding], nil
 }

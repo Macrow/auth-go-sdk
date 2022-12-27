@@ -3,7 +3,8 @@ package auth
 import (
 	"crypto/cipher"
 	"encoding/base64"
-	"github.com/go-errors/errors"
+	"errors"
+	"fmt"
 )
 
 // AesUtil AES加密采用128位AES/ECB/PKCS5Padding，不使用偏移量，最后用Base64输出
@@ -39,7 +40,7 @@ func (a *AesUtil) decrypt(content string) (string, error) {
 	}
 	decrypted := make([]byte, len(plainText))
 	var errCatch error = nil
-	a.CryptBlocks(a.encryptBlock, decrypted, plainText, errCatch)
+	a.CryptBlocks(a.decryptBlock, decrypted, plainText, errCatch)
 	if errCatch != nil {
 		return "", ErrDecryptFail
 	}
@@ -54,7 +55,7 @@ func (a *AesUtil) decrypt(content string) (string, error) {
 func (a *AesUtil) CryptBlocks(block cipher.BlockMode, dist, src []byte, errCatch error) {
 	defer func() {
 		if err := recover(); err != nil {
-			errCatch = errors.New(err)
+			errCatch = errors.New(fmt.Sprint(err))
 		}
 	}()
 	block.CryptBlocks(dist, src)
