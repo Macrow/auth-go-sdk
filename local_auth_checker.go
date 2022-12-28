@@ -13,7 +13,7 @@ func (c *LocalAuthChecker) ExtractAccessCode(f GetHeaderFun) (string, error) {
 }
 
 func (c *LocalAuthChecker) ExtractRandomKey(f GetHeaderFun) (string, error) {
-	return ExtractRandomKey(f, c.Config.LocalRandomKey.Header, c.Config.LocalRandomKey.EncryptContent, aesUtil, c.logger)
+	return ExtractRandomKey(f, c.Config.LocalRandomKey.Header)
 }
 
 func (c *LocalAuthChecker) ExtractUserToken(f GetHeaderFun) (string, error) {

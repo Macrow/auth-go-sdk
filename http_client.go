@@ -74,29 +74,13 @@ func (c *HttpClient) initAccessCodeAndRandomKey(f GetHeaderFun, r *req.Request) 
 	}
 	if c.Config.RandomKey.Enable {
 		if f == nil {
-			if c.Config.RandomKey.EncryptContent {
-				randomKey, err := c.AesUtil.encrypt(GenerateRandomKey())
-				if err != nil {
-					panic(err)
-				}
-				r.SetHeader(c.Config.RandomKey.Header, randomKey)
-			} else {
-				r.SetHeader(c.Config.RandomKey.Header, GenerateRandomKey())
-			}
+			r.SetHeader(c.Config.RandomKey.Header, GenerateRandomKey())
 		} else {
-			randomKey, err := ExtractRandomKey(f, c.Config.RandomKey.Header, c.Config.RandomKey.EncryptContent, c.AesUtil, c.logger)
+			randomKey, err := ExtractRandomKey(f, c.Config.RandomKey.Header)
 			if err != nil {
 				return err
 			}
-			if c.Config.RandomKey.EncryptContent {
-				randomKey, err = c.AesUtil.encrypt(randomKey)
-				if err != nil {
-					panic(err)
-				}
-				r.SetHeader(c.Config.RandomKey.Header, randomKey)
-			} else {
-				r.SetHeader(c.Config.RandomKey.Header, randomKey)
-			}
+			r.SetHeader(c.Config.RandomKey.Header, randomKey)
 		}
 	}
 	return nil

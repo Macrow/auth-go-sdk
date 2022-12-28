@@ -7,9 +7,8 @@ type LocalAccessCode struct {
 }
 
 type LocalRandomKey struct {
-	Enable         bool
-	Header         string
-	EncryptContent bool
+	Enable bool
+	Header string
 }
 
 type LocalUser struct {

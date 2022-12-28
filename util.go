@@ -81,18 +81,10 @@ func ExtractAccessCode(f GetHeaderFun, header string, encryptContent bool, aesUt
 	return val, nil
 }
 
-func ExtractRandomKey(f GetHeaderFun, header string, encryptContent bool, aesUtil *AesUtil, logger logr.Logger) (string, error) {
+func ExtractRandomKey(f GetHeaderFun, header string) (string, error) {
 	val := f(header)
 	if len(val) == 0 {
 		return "", ErrRandomKeyEmpty
-	}
-	if encryptContent && aesUtil != nil {
-		var err error
-		val, err = aesUtil.decrypt(val)
-		if err != nil {
-			logger.Error(err, err.Error())
-			return "", ErrDecryptFail
-		}
 	}
 	return val, nil
 }

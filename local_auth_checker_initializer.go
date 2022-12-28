@@ -16,7 +16,6 @@ func WithLocalRandomKeyConfig(config LocalRandomKey) LocalCheckerOption {
 	return func(checker *LocalAuthChecker) {
 		checker.Config.LocalRandomKey.Enable = config.Enable
 		checker.Config.LocalRandomKey.Header = GetNonEmptyValueWithBackup(config.Header, DefaultHeaderRandomKey)
-		checker.Config.LocalRandomKey.EncryptContent = config.EncryptContent
 	}
 }
 
@@ -57,9 +56,8 @@ func NewLocalAuthChecker(aesKey string, options ...LocalCheckerOption) *LocalAut
 				EncryptContent: false,
 			},
 			LocalRandomKey: LocalRandomKey{
-				Enable:         false,
-				Header:         DefaultHeaderRandomKey,
-				EncryptContent: false,
+				Enable: false,
+				Header: DefaultHeaderRandomKey,
 			},
 			LocalUser: LocalUser{
 				Header:       DefaultHeaderUserToken,

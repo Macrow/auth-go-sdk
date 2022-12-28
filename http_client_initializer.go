@@ -12,6 +12,7 @@ func WithAccessCodeConfig(config AccessCode) ClientOption {
 		client.Config.AccessCode.Enable = config.Enable
 		client.Config.AccessCode.SkipUserTokenCheck = config.SkipUserTokenCheck
 		client.Config.AccessCode.Header = GetNonEmptyValueWithBackup(config.Header, DefaultHeaderAccessCode)
+		client.Config.AccessCode.EncryptContent = config.EncryptContent
 	}
 }
 
@@ -37,6 +38,7 @@ func WithClientConfig(config Client) ClientOption {
 		client.Config.Client.AccessCode = config.AccessCode
 		client.Config.Client.Header = GetNonEmptyValueWithBackup(config.Header, DefaultHeaderClientToken)
 		client.Config.Client.HeaderSchema = GetNonEmptyValueWithBackup(config.HeaderSchema, DefaultHeaderSchema)
+		client.Config.Client.EncryptContent = config.EncryptContent
 	}
 }
 
@@ -63,6 +65,7 @@ func NewHttpClient(AuthServiceBaseUrl string, CurrentServiceName string, aesKey 
 				Enable:             false,
 				SkipUserTokenCheck: true,
 				Header:             DefaultHeaderAccessCode,
+				EncryptContent:     false,
 			},
 			RandomKey: RandomKey{
 				Enable: false,
@@ -76,6 +79,7 @@ func NewHttpClient(AuthServiceBaseUrl string, CurrentServiceName string, aesKey 
 				EnableIdAndSecret: true,
 				Header:            DefaultHeaderClientToken,
 				HeaderSchema:      DefaultHeaderSchema,
+				EncryptContent:    false,
 			},
 			Auditing: Auditing{
 				MetaBy: DefaultMetaBy,

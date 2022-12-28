@@ -14,9 +14,8 @@ type AccessCode struct {
 }
 
 type RandomKey struct {
-	Enable         bool
-	Header         string
-	EncryptContent bool
+	Enable bool
+	Header string
 }
 
 type User struct {
