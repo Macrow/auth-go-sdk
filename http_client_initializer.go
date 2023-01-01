@@ -60,6 +60,7 @@ func NewHttpClient(AuthServiceBaseUrl string, CurrentServiceName string, aesKey 
 			Service: Service{
 				AuthServiceBaseUrl: AuthServiceBaseUrl,
 				CurrentServiceName: CurrentServiceName,
+				EnableTraceLog:     true,
 			},
 			AccessCode: AccessCode{
 				Enable:             false,

@@ -34,4 +34,6 @@ const (
 	KeyCustomPerm    = "__CustomPerm__"
 	KeyClientId      = "__ClientId__"
 	KeyMetaBy        = "__MetaBy__"
+
+	TraceId = "request-trace-id"
 )

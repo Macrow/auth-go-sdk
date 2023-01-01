@@ -4,6 +4,7 @@ type Service struct {
 	AuthServiceBaseUrl string
 	CurrentServiceName string
 	EncryptKey         string
+	EnableTraceLog     bool
 }
 
 type AccessCode struct {

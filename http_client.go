@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"github.com/go-logr/logr"
+	"github.com/google/uuid"
 	"github.com/imroc/req/v3"
 	"net/http"
 	"strconv"
@@ -37,6 +38,22 @@ func handleError[T Result](res *req.Response, result *HttpResponse[T], logger lo
 	}
 	if validateResultIsNull && result.Result == nil {
 		return ErrNoResult
+	}
+	return nil
+}
+
+func (c *HttpClient) initTraceLog(f GetHeaderFun, r *req.Request) error {
+	if c.Config.EnableTraceLog {
+		var traceId string
+		if f == nil {
+			traceId = uuid.New().String()
+		} else {
+			traceId = f(TraceId)
+			if len(traceId) == 0 {
+				traceId = uuid.New().String()
+			}
+		}
+		r.SetHeader(TraceId, traceId)
 	}
 	return nil
 }
@@ -132,7 +149,12 @@ func (c *HttpClient) initClientToken(f GetHeaderFun, r *req.Request) (string, er
 
 func (c *HttpClient) CheckAuth(f GetHeaderFun, fulfillCustomAuth bool) (*CheckAuthResult, error) {
 	r := c.Agent.Post(UrlPostCheckAuth)
-	err := c.initAccessCodeAndRandomKey(f, r)
+	err := c.initTraceLog(f, r)
+	if err != nil {
+		c.logger.Error(err, err.Error())
+		return nil, err
+	}
+	err = c.initAccessCodeAndRandomKey(f, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return nil, err
@@ -159,7 +181,12 @@ func (c *HttpClient) CheckAuth(f GetHeaderFun, fulfillCustomAuth bool) (*CheckAu
 
 func (c *HttpClient) CheckPermByCode(f GetHeaderFun, code string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) (*CheckPermResult, error) {
 	r := c.Agent.Post(UrlPostCheckPermByCode)
-	err := c.initAccessCodeAndRandomKey(f, r)
+	err := c.initTraceLog(f, r)
+	if err != nil {
+		c.logger.Error(err, err.Error())
+		return nil, err
+	}
+	err = c.initAccessCodeAndRandomKey(f, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return nil, err
@@ -191,7 +218,12 @@ func (c *HttpClient) CheckPermByCode(f GetHeaderFun, code string, fulfillJwt boo
 
 func (c *HttpClient) CheckPermByAction(f GetHeaderFun, service string, method string, path string, fulfillJwt bool, fulfillCustomAuth bool, fulfillCustomPerm bool) (*CheckPermResult, error) {
 	r := c.Agent.Post(UrlPostCheckPermByAction)
-	err := c.initAccessCodeAndRandomKey(f, r)
+	err := c.initTraceLog(f, r)
+	if err != nil {
+		c.logger.Error(err, err.Error())
+		return nil, err
+	}
+	err = c.initAccessCodeAndRandomKey(f, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return nil, err
@@ -225,7 +257,12 @@ func (c *HttpClient) CheckPermByAction(f GetHeaderFun, service string, method st
 
 func (c *HttpClient) CheckClientAuth(f GetHeaderFun) (*CheckClientAuthResult, error) {
 	r := c.Agent.Post(UrlPostCheckClientAuth)
-	err := c.initAccessCodeAndRandomKey(f, r)
+	err := c.initTraceLog(f, r)
+	if err != nil {
+		c.logger.Error(err, err.Error())
+		return nil, err
+	}
+	err = c.initAccessCodeAndRandomKey(f, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return nil, err
@@ -248,7 +285,12 @@ func (c *HttpClient) CheckClientAuth(f GetHeaderFun) (*CheckClientAuthResult, er
 
 func (c *HttpClient) CheckClientPermByCode(f GetHeaderFun, code string) (*CheckClientPermResult, error) {
 	r := c.Agent.Post(UrlPostCheckClientPermByCode)
-	err := c.initAccessCodeAndRandomKey(f, r)
+	err := c.initTraceLog(f, r)
+	if err != nil {
+		c.logger.Error(err, err.Error())
+		return nil, err
+	}
+	err = c.initAccessCodeAndRandomKey(f, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return nil, err
@@ -272,9 +314,14 @@ func (c *HttpClient) CheckClientPermByCode(f GetHeaderFun, code string) (*CheckC
 	return result.Result, nil
 }
 
-func (c *HttpClient) ClientRequest(urlPath string, httpMethod string, queryParam map[string]any, formData map[string]any) (any, error) {
+func (c *HttpClient) ClientRequest(traceId string, urlPath string, httpMethod string, queryParam map[string]any, formData map[string]any) (any, error) {
 	r := c.Agent.R()
-	err := c.initAccessCodeAndRandomKey(nil, r)
+	var err error
+	if len(traceId) == 0 {
+		traceId = uuid.New().String()
+	}
+	r.SetHeader(TraceId, traceId)
+	err = c.initAccessCodeAndRandomKey(nil, r)
 	if err != nil {
 		c.logger.Error(err, err.Error())
 		return nil, err
